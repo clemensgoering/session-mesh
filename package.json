@@ -1,0 +1,143 @@
+{
+  "name": "session-mesh",
+  "displayName": "Session Mesh",
+  "description": "Direkte Kommunikation zwischen Claude- und Codex-Sitzungen",
+  "version": "0.1.0",
+  "publisher": "local-lab",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "main": "./extension.cjs",
+  "activationEvents": [
+    "onView:sessionMesh.sessions"
+  ],
+  "scripts": {
+    "check": "node --check core.cjs && node --check extension.cjs && node --check mcp.cjs && node --check test.cjs",
+    "test": "node --test test.cjs",
+    "package": "vsce package --target win32-x64 --no-dependencies",
+    "release:check": "node scripts/release-check.cjs",
+    "package:release": "npm run release:check && vsce package --target win32-x64 --no-dependencies --pre-release"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sessionMesh",
+          "title": "Session Mesh",
+          "icon": "mesh.svg"
+        }
+      ]
+    },
+    "views": {
+      "sessionMesh": [
+        {
+          "id": "sessionMesh.sessions",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sessionMesh.create",
+        "title": "Session Mesh: Neue Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sessionMesh.send",
+        "title": "Session Mesh: Nachricht senden"
+      },
+      {
+        "command": "sessionMesh.open",
+        "title": "Session Mesh: Unterhaltung öffnen"
+      },
+      {
+        "command": "sessionMesh.stop",
+        "title": "Session Mesh: Session stoppen"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sessionMesh.create",
+          "when": "view == sessionMesh.sessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sessionMesh.send",
+          "when": "view == sessionMesh.sessions"
+        },
+        {
+          "command": "sessionMesh.stop",
+          "when": "view == sessionMesh.sessions"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Session Mesh",
+      "properties": {
+        "sessionMesh.codexPath": {
+          "type": "string",
+          "default": "",
+          "description": "Codex executable; empty discovers the installed extension.",
+          "scope": "machine",
+          "restricted": true
+        },
+        "sessionMesh.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Claude executable; empty discovers the installed extension.",
+          "scope": "machine",
+          "restricted": true
+        },
+        "sessionMesh.nodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Node.js executable for the messaging tool server.",
+          "scope": "machine",
+          "restricted": true
+        }
+      }
+    }
+  },
+  "license": "MIT",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "codex",
+    "agents",
+    "orchestration",
+    "messaging"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Session Mesh starts local AI harness processes and requires a trusted workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "A local Windows filesystem workspace is required."
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.0.0"
+  },
+  "overrides": {
+    "@azure/identity": "4.13.0",
+    "uuid": "11.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clemensgoering/session-mesh.git"
+  },
+  "homepage": "https://github.com/clemensgoering/session-mesh#readme",
+  "bugs": {
+    "url": "https://github.com/clemensgoering/session-mesh/issues"
+  }
+}
