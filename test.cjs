@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),net=require('node:net');
 const {CodexIPC}=require('./ipc.cjs');
-const {NativeMesh,resolveTarget,codexState,ownerText,ownerReceipt,ownerViewHealth}=require('./native.cjs');
+const {NativeMesh,resolveTarget,codexState,ownerText,ownerReceipt,ownerViewHealth,ownerSteerParams}=require('./native.cjs');
 const {createHandler}=require('./mcp.cjs');
 const {planSetup,applyPlan,managed}=require('./setup.cjs');
 const {BridgeState,routingStatus}=require('./bridge-state.cjs');
@@ -115,4 +115,10 @@ test('old optimistic input damage is diagnosed and blocked until native view rel
   const health=ownerViewHealth(bad);assert.equal(health.uiState,'needs-reload');assert.equal(health.invalidTextInputs,1);
   const route=routingStatus({id:'codex:a',harness:'codex',reachable:true,ownerClientId:'owner',...health},{codexMode:'any-owner'});assert.equal(route.routeReady,false);assert.equal(route.routeBlock,'native-view-needs-reload');
   bad.turnHistory.history.entitiesByKey.old.params.input[0].text_elements=[];assert.equal(ownerViewHealth(bad).uiState,'ready');
+});
+test('busy UI steer carries the native restoreMessage and workspace context contract',()=>{
+  const p=ownerSteerParams('existing-thread',[ownerText('test')],'test','message',{cwd:'C:/fallback',environments:[{cwd:'D:/actual'}]});
+  // These dereferences reproduce the installed UI's pre-dispatch path.
+  assert.equal(p.restoreMessage.cwd,'D:/actual');assert.deepEqual(p.restoreMessage.context.workspaceRoots,['D:/actual']);assert.equal(p.restoreMessage.context.prompt,'test');assert.equal(p.restoreMessage.id,p.clientUserMessageId);assert.deepEqual(p.attachments,[]);
+  const unknown=ownerSteerParams('existing-thread',[ownerText('test')],'test','message',{});assert.deepEqual(unknown.restoreMessage.context.workspaceRoots,[]);assert.equal(unknown.restoreMessage.cwd,undefined);
 });

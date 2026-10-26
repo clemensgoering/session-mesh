@@ -10,7 +10,7 @@ After installing 0.3.2, reload the owning Codex UI (for a VS Code owner: Develop
 
 ## Minimal remote orchestration setup
 
-Use a remote-enabled Claude session as your phone entry point. Keep your existing Codex workers open locally in VS Code or Desktop. Both load the same user-wide Session Mesh MCP server and standards. Claude identifies itself, sends a task to an exact Codex ID, and asks the worker to explicitly send_message its result back to Claude. From the phone, continue that same Claude Remote Control session. Codex does not need its own mobile connection for this route. Both directions still require a live end-to-end test.
+Use a remote-enabled Claude session as your phone entry point. Keep your existing Codex workers open locally in VS Code or Desktop. Both load the same user-wide Session Mesh MCP server and standards. Claude identifies itself, sends a task to an exact Codex ID, and asks the worker to explicitly send_message its result back to Claude. From the phone, continue that same Claude Remote Control session. Codex does not need its own mobile connection for this route. A local live test has now completed Codex → Claude → Codex and a separate active-turn steering check. This does not verify mobile UI access.
 
 Version 0.3.1 removes the accidental default Desktop-confirmation barrier. Online local recipients may receive messages through their real owner even if the owner app type is unknown. If upgrading a setup that explicitly saved desktop-only mode, choose Codex-Routing ? Alle lokalen Besitzer erlauben. Direct mobile control of every Codex thread remains independent and is not promised by this tunnel.
 
@@ -41,7 +41,7 @@ Hidden entries, online, idle, routeReady, owner application evidence and remote 
 
 Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
 
-1. Install `session-mesh-win32-x64-0.3.2.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
+1. Install `session-mesh-win32-x64-0.3.3.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
 2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
 3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
 4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.

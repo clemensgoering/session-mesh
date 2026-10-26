@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 — Complete busy-turn request metadata
+
+- Supplies restoreMessage (cwd, context/workspace roots, text and ID) and attachments on the private steering path. The owner UI dereferences these fields before dispatching turn/steer.
+- Adds a regression for that native pre-dispatch contract.
+- Local live verification: existing Codex worker sent a new test ping to Claude, Claude replied and the Codex worker confirmed ROUNDTRIP_OK; a separate active-turn steering probe confirmed BUSY_OK. Native view stayed ready with zero malformed inputs. No prior business message was resent.
+- Test setup also exposed a stale/closed MCP connection in the controlling chat. The official thread-message API was used to supply the direct user-authorized test task; ping/pong used Session Mesh. Existing MCP clients must reconnect to load this version. Mobile access is unverified.
+
+Validation: 24 passing tests plus the local live checks above.
+
 ## 0.3.2 — Fix native UI text and owner receipts
 
 - Supplies the mandatory text_elements array on private owner UI text input, preventing the observed Desktop placeholder renderer crash.

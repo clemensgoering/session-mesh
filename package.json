@@ -2,7 +2,7 @@
   "name": "session-mesh",
   "displayName": "Session Mesh",
   "description": "Tunnel zwischen vorhandenen Claude- und Codex-Sitzungen mit nativer Erkennung und gemeinsamen Nachrichtenwerkzeugen",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "local-lab",
   "engines": {
     "vscode": "^1.94.0"

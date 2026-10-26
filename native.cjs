@@ -15,6 +15,12 @@ function codexState(snapshot) {
 // UI-owner requests use a richer contract than public app-server text input.
 // Desktop's rendering path calls text_elements.some without a null fallback.
 function ownerText(text){return {type:'text',text,text_elements:[]};}
+function ownerSteerParams(conversationId,input,text,messageId,snapshot){
+  const cwd=snapshot?.environments?.[0]?.cwd||snapshot?.cwd||undefined;
+  // The native UI dereferences restoreMessage.cwd and restoreMessage.context
+  // before dispatching turn/steer. This is UI recovery metadata, not a cwd override.
+  return {conversationId,input,clientUserMessageId:messageId,attachments:[],restoreMessage:{id:messageId,text,cwd,createdAt:Date.now(),context:{prompt:text,addedFiles:[],fileAttachments:[],ideContext:null,imageAttachments:[],workspaceRoots:cwd?[cwd]:[]}}};
+}
 function ownerViewHealth(snapshot){
   if(!snapshot)return {uiState:'unknown',invalidTextInputs:0};
   const pending=[snapshot],seen=new Set();let invalidTextInputs=0;
@@ -103,7 +109,7 @@ class NativeMesh {
     if (!snapshot || codexState(snapshot) === 'unknown') throw Error('Native turn state is unknown; refresh before sending to avoid starting a competing turn');
     const method = busy ? 'thread-follower-steer-turn' : 'thread-follower-start-turn';
     const input = [ownerText(content)];
-    const params = busy ? {conversationId:target.nativeId,input,clientUserMessageId:messageId} : {
+    const params = busy ? ownerSteerParams(target.nativeId,input,content,messageId,snapshot) : {
       conversationId: target.nativeId,
       turnStart: { request: { threadId: target.nativeId, input, clientUserMessageId: messageId }, context: { inheritThreadSettings: true } }
     };
@@ -149,4 +155,4 @@ class NativeMesh {
   }
   close() { this.ipc.close(); }
 }
-module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth };
+module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth, ownerSteerParams };

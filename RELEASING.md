@@ -2,7 +2,7 @@
 
 ## Current status
 
-The source repository is https://github.com/clemensgoering/session-mesh . Version 0.3.2 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
+The source repository is https://github.com/clemensgoering/session-mesh . Version 0.3.3 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
 
 ## Before a public listing
 
