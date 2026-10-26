@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),net=require('node:net');
 const {CodexIPC}=require('./ipc.cjs');
-const {NativeMesh,resolveTarget,codexState}=require('./native.cjs');
+const {NativeMesh,resolveTarget,codexState,ownerText,ownerReceipt,ownerViewHealth}=require('./native.cjs');
 const {createHandler}=require('./mcp.cjs');
 const {planSetup,applyPlan,managed}=require('./setup.cjs');
 const {BridgeState,routingStatus}=require('./bridge-state.cjs');
@@ -39,7 +39,7 @@ test('setup preserves existing config, backs up files and is idempotent',async()
 });
 test('malformed managed blocks fail rather than overwriting user instructions',()=>{assert.throws(()=>managed('hello <!-- SESSION-MESH:START -->','new'),/Malformed/)});
 test('Codex active turn uses owning client steering and preserves thread ID',async()=>{
-  let call;const ipc={owner:async()=>({handledByClientId:'owner',result:{supportsUntrustedAppInput:true}}),snapshot:async()=>({threadRuntimeStatus:{type:'active'}}),request:async(...args)=>{call=args;return {result:{method:args[0]}}}};
+  let call;const ipc={owner:async()=>({handledByClientId:'owner',result:{supportsUntrustedAppInput:true}}),snapshot:async()=>({threadRuntimeStatus:{type:'active'}}),request:async(...args)=>{call=args;return {type:'response',resultType:'success',method:args[0],result:{result:args[0]==='thread-follower-start-turn'?{turn:{id:'fixture-turn'}}:{turnId:'fixture-turn'}}}}};
   const mesh=new NativeMesh({ipc,state:{read:async()=>({codexMode:'any-owner',desktopOwners:{},mobileChecks:{}})}});mesh.list=async()=>[{id:'codex:target',nativeId:'target',reachable:true,harness:'codex'}];
   const r=await mesh.send('codex:target','message',{id:'claude:sender',name:'sender'});assert.equal(call[0],'thread-follower-steer-turn');assert.equal(call[1].conversationId,'target');assert.equal(call[2].targetClientId,'owner');assert.equal(r.status,'accepted');
 });
@@ -60,7 +60,7 @@ test('user-wide setup targets both harness configs and global instructions',asyn
   }finally{await fs.rm(dir,{recursive:true,force:true})}
 });
 test('idle Codex target starts a turn on exactly its existing owning window',async()=>{
-  let call;const mesh=new NativeMesh({state:{read:async()=>({version:1,codexMode:'any-owner',desktopOwners:{},mobileChecks:{}})},ipc:{owner:async()=>({handledByClientId:'owner'}),snapshot:async()=>({threadRuntimeStatus:{type:'idle'}}),request:async(...args)=>{call=args;return {result:{method:args[0]}}}}});
+  let call;const mesh=new NativeMesh({state:{read:async()=>({version:1,codexMode:'any-owner',desktopOwners:{},mobileChecks:{}})},ipc:{owner:async()=>({handledByClientId:'owner'}),snapshot:async()=>({threadRuntimeStatus:{type:'idle'}}),request:async(...args)=>{call=args;return {type:'response',resultType:'success',method:args[0],result:{result:args[0]==='thread-follower-start-turn'?{turn:{id:'fixture-turn'}}:{turnId:'fixture-turn'}}}}}});
   mesh.list=async()=>[{id:'codex:target',nativeId:'target',reachable:true,harness:'codex'}];await mesh.send('codex:target','hello');
   assert.equal(call[0],'thread-follower-start-turn');assert.equal(call[1].turnStart.request.threadId,'target');assert.equal(call[2].version,2);assert.equal(call[2].targetClientId,'owner');assert.deepEqual(call[1].turnStart.context,{inheritThreadSettings:true});
 });
@@ -95,3 +95,24 @@ test('read-only MCP diagnosis does not send or require claiming another identity
 });
 
 test('default local mode routes unknown and VS Code owners without Desktop attestation',async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-default-'));try{const state=new BridgeState(path.join(dir,'state.json'));const config=await state.read();for(const type of [undefined,'vscode']){const row=routingStatus({id:'codex:a',harness:'codex',ownerClientId:'native',reachable:true},config,type);assert.equal(row.routeReady,true);assert.equal(row.remote,'unverified');}}finally{await fs.rm(dir,{recursive:true,force:true})}});
+
+test('owner text is safe for the actual desktop aeon-placeholder renderer contract',()=>{
+  // Reproduce the precise throwing expression from the installed Desktop error stack.
+  const renderCheck=input=>input?.some(e=>e.type==='text'&&e.text_elements.some(({placeholder})=>placeholder==='aeon-continuation'))===true;
+  assert.throws(()=>renderCheck([{type:'text',text:'old wire shape'}]),/some/);
+  assert.equal(renderCheck([ownerText('new wire shape')]),false);
+  assert.equal(ownerText('quoted "\ntext').text,'quoted "\ntext');
+});
+test('owner acceptance decodes the real outer-method, unwrapped-result envelope',()=>{
+  const start={type:'response',requestId:'test',resultType:'success',method:'thread-follower-start-turn',handledByClientId:'native-owner',result:{result:{turn:{id:'native-turn',status:'inProgress'}}}};
+  assert.deepEqual(ownerReceipt(start,'thread-follower-start-turn'),{turnId:'native-turn',resultMethod:'thread-follower-start-turn'});
+  const steer={...start,method:'thread-follower-steer-turn',result:{result:{turnId:'native-turn'}}};assert.equal(ownerReceipt(steer,'thread-follower-steer-turn').turnId,'native-turn');
+  assert.throws(()=>ownerReceipt({...start,method:'different'},'thread-follower-start-turn'),/delivery unknown/);
+  assert.throws(()=>ownerReceipt({...start,result:{result:{}}},'thread-follower-start-turn'),/no turn ID/);
+});
+test('old optimistic input damage is diagnosed and blocked until native view reload',()=>{
+  const bad={threadRuntimeStatus:{type:'idle'},turnHistory:{history:{entitiesByKey:{old:{params:{input:[{type:'text',text:'already delivered'}]}}}}}};
+  const health=ownerViewHealth(bad);assert.equal(health.uiState,'needs-reload');assert.equal(health.invalidTextInputs,1);
+  const route=routingStatus({id:'codex:a',harness:'codex',reachable:true,ownerClientId:'owner',...health},{codexMode:'any-owner'});assert.equal(route.routeReady,false);assert.equal(route.routeBlock,'native-view-needs-reload');
+  bad.turnHistory.history.entitiesByKey.old.params.input[0].text_elements=[];assert.equal(ownerViewHealth(bad).uiState,'ready');
+});

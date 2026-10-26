@@ -14,8 +14,9 @@ function routingStatus(row,state,observedType){
   const ownerApp=row.harness==='claude'?(row.entrypoint||'unknown'):observed || (confirmation?'desktop-confirmed':'unknown');
   const ownerEvidence=row.harness==='claude'?'native-registry':observed?'native-client-status':confirmation?'user-confirmed':'unavailable';
   const desktop=ownerApp==='desktop'||ownerApp==='desktop-confirmed';
-  const routeReady=Boolean(row.reachable)&&(row.harness!=='codex'||state.codexMode==='any-owner'||desktop);
+  const brokenView=row.harness==='codex'&&row.uiState==='needs-reload';
+  const routeReady=Boolean(row.reachable)&&!brokenView&&(row.harness!=='codex'||state.codexMode==='any-owner'||desktop);
   const mobile=state.mobileChecks?.[row.id];
-  return {ownerApp,ownerEvidence,nativeClientType:observedType||null,routeReady,routingMode:state.codexMode||'any-owner',remote:mobile&&mobile.ownerClientId===row.ownerClientId?'user-confirmed':row.harness==='claude'?row.remote:'unverified',remoteCheckedAt:mobile?.ownerClientId===row.ownerClientId?mobile?.confirmedAt:null,role:state.orchestratorId===row.id?'orchestrator':'peer',routeBlock:routeReady?null:!row.reachable?'no-live-owner':observed==='vscode'?'owned-in-vscode':'desktop-owner-not-confirmed'};
+  return {ownerApp,ownerEvidence,nativeClientType:observedType||null,routeReady,routingMode:state.codexMode||'any-owner',remote:mobile&&mobile.ownerClientId===row.ownerClientId?'user-confirmed':row.harness==='claude'?row.remote:'unverified',remoteCheckedAt:mobile?.ownerClientId===row.ownerClientId?mobile?.confirmedAt:null,role:state.orchestratorId===row.id?'orchestrator':'peer',routeBlock:routeReady?null:!row.reachable?'no-live-owner':brokenView?'native-view-needs-reload':observed==='vscode'?'owned-in-vscode':'desktop-owner-not-confirmed'};
 }
 module.exports={BridgeState,routingStatus};

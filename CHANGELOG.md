@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — Fix native UI text and owner receipts
+
+- Supplies the mandatory text_elements array on private owner UI text input, preventing the observed Desktop placeholder renderer crash.
+- Decodes the method on the outer IPC reply and the unwrapped result; exposes the native turnId on accepted sends.
+- Detects previously malformed optimistic input caches, reports native-view-needs-reload and blocks additional sends until UI recovery.
+- Replaces self-consistent mock replies with fixtures matching the installed owner bridge response contract.
+
+Validation: 23 passing tests. The affected business message was verified in persisted Codex history, its turn completed, and its reply was found in the recipient Claude transcript as peer input. No business message was resent. Existing UI cache recovery and a new live send with this fix require verification after the owning UI/MCP reload.
+
 ## 0.3.1 ? Remove the accidental local-routing barrier
 
 - Default local routing accepts actual live Codex owners without a Desktop attestation.

@@ -12,6 +12,28 @@ function codexState(snapshot) {
   if (runtime === 'idle') return 'idle';
   return 'unknown';
 }
+// UI-owner requests use a richer contract than public app-server text input.
+// Desktop's rendering path calls text_elements.some without a null fallback.
+function ownerText(text){return {type:'text',text,text_elements:[]};}
+function ownerViewHealth(snapshot){
+  if(!snapshot)return {uiState:'unknown',invalidTextInputs:0};
+  const pending=[snapshot],seen=new Set();let invalidTextInputs=0;
+  while(pending.length){const value=pending.pop();if(!value||typeof value!=='object'||seen.has(value))continue;seen.add(value);
+    if(seen.size>150000)return {uiState:'unknown',invalidTextInputs};
+    if(Array.isArray(value.params?.input))for(const input of value.params.input)if(input?.type==='text'&&!Array.isArray(input.text_elements))invalidTextInputs++;
+    for(const next of Object.values(value))if(next&&typeof next==='object')pending.push(next);
+  }
+  return {uiState:invalidTextInputs?'needs-reload':'ready',invalidTextInputs};
+}
+function ownerReceipt(response,method){
+  // eUt in the owning extension unwraps {method,result} once before IPC replies.
+  // The method discriminator is on the OUTER IPC response, not result.method.
+  if(response?.type!=='response'||response.resultType!=='success'||response.method!==method)throw Error('Unexpected owner response; delivery unknown. Do not retry automatically.');
+  const payload=response.result?.result;
+  const turnId=method==='thread-follower-start-turn'?payload?.turn?.id:payload?.turnId;
+  if(typeof turnId!=='string'||!turnId)throw Error('Owner response has no turn ID; delivery unknown. Do not retry automatically.');
+  return {turnId,resultMethod:response.method};
+}
 async function readClaude(home) {
   const dir = path.join(home, '.claude', 'sessions'); let names; try { names = await fs.readdir(dir); } catch { return []; }
   const rows = await Promise.all(names.filter(n => /^\d+\.json$/.test(n)).map(async n => {
@@ -54,7 +76,7 @@ class NativeMesh {
         const item = { id: `codex:${r.id}`, nativeId: r.id, name: r.thread_name || r.id, harness: 'codex', cwd: '', state: 'not-loaded', online: false, available: false, reachable: false, remote: 'unknown', source: 'saved-index', updatedAt: r.updated_at };
         if (connected) try {
           const owner = await this.ipc.owner(r.id); item.owner = owner.handledByClientId; item.ownerClientId=item.owner; item.online = item.reachable = true; item.source = 'live-owner'; item.state = 'unknown';
-          if (withState) { const snap = await this.ipc.snapshot(r.id, item.owner); item.state = codexState(snap); item.cwd = snap?.cwd || ''; item.available = item.state === 'idle'; }
+          if (withState) { const snap = await this.ipc.snapshot(r.id, item.owner); item.state = codexState(snap); item.cwd = snap?.cwd || ''; item.available = item.state === 'idle'; Object.assign(item,ownerViewHealth(snap)); }
         } catch {}
         codex.push(item);
       }
@@ -76,10 +98,11 @@ class NativeMesh {
     if (sender.id !== 'human-via-vscode' && owner.result?.supportsUntrustedAppInput !== true) throw Error('Owner does not advertise untrusted input support');
     // The owning UI applies its existing model, permission and routing settings.
     const snapshot = await this.ipc.snapshot(target.nativeId, owner.handledByClientId);
+    if(ownerViewHealth(snapshot).uiState==='needs-reload')throw Error('The owning Codex view still caches malformed text input from an older delivery. Reload the owning Codex window, then reopen the same thread. No new message was sent; do not resend the already received business message.');
     const busy = codexState(snapshot) === 'busy';
     if (!snapshot || codexState(snapshot) === 'unknown') throw Error('Native turn state is unknown; refresh before sending to avoid starting a competing turn');
     const method = busy ? 'thread-follower-steer-turn' : 'thread-follower-start-turn';
-    const input = [{ type: 'text', text: content }];
+    const input = [ownerText(content)];
     const params = busy ? {conversationId:target.nativeId,input,clientUserMessageId:messageId} : {
       conversationId: target.nativeId,
       turnStart: { request: { threadId: target.nativeId, input, clientUserMessageId: messageId }, context: { inheritThreadSettings: true } }
@@ -87,12 +110,12 @@ class NativeMesh {
     const latestOwner=await this.ipc.owner(target.nativeId);
     if(latestOwner.handledByClientId!==owner.handledByClientId)throw Error('Owner changed before submission; refresh and inspect. Nothing was sent.');
     const response = await this.ipc.request(method, params, { version: busy ? 1 : 2, timeout: 20000, targetClientId: owner.handledByClientId });
-    if(response.result?.method!==method)throw Error('Unexpected owner response; delivery unknown. Do not retry automatically.');
-    return { messageId, to: target.id, status: 'accepted', ownerClientId:owner.handledByClientId,ownerApp:routing.ownerApp,remote:routing.remote, detail: 'Owning UI accepted request; not a model completion or mobile acknowledgement', resultMethod: response.result?.method };
+    const receipt=ownerReceipt(response,method);
+    return { messageId, to: target.id, status: 'accepted', ownerClientId:owner.handledByClientId,ownerApp:routing.ownerApp,remote:routing.remote, detail: 'Owning UI accepted request; not a model completion or mobile acknowledgement', ...receipt };
   }
   async inspect(targetId){
     const row=resolveTarget(await this.list(),targetId);
-    return {id:row.id,name:row.name,harness:row.harness,online:row.online,available:row.available,state:row.state,ownerClientId:row.ownerClientId||null,ownerApp:row.ownerApp,ownerEvidence:row.ownerEvidence,routeReady:row.routeReady,routeBlock:row.routeBlock,remote:row.remote,remoteCheckedAt:row.remoteCheckedAt,role:row.role};
+    return {id:row.id,name:row.name,harness:row.harness,online:row.online,available:row.available,state:row.state,uiState:row.uiState||'unknown',invalidTextInputs:row.invalidTextInputs||0,ownerClientId:row.ownerClientId||null,ownerApp:row.ownerApp,ownerEvidence:row.ownerEvidence,routeReady:row.routeReady,routeBlock:row.routeBlock,remote:row.remote,remoteCheckedAt:row.remoteCheckedAt,role:row.role};
   }
   async confirmDesktop(targetId,expectedOwner){
     const row=resolveTarget(await this.list({withState:false}),targetId);if(row.harness!=='codex'||!row.ownerClientId)throw Error('Select a reachable Codex thread');
@@ -126,4 +149,4 @@ class NativeMesh {
   }
   close() { this.ipc.close(); }
 }
-module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive };
+module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth };

@@ -29,3 +29,7 @@ Client status broadcasts can identify a client type when observed. Existing owne
 ## 0.3.1 correction
 
 The 0.3 Desktop-attestation default blocked otherwise reachable recipients before any message was sent. It is now optional; the default sends to the actual native owner. Unknown app type is diagnostic information, not a failed transport. Keep local send/receive testing separate from phone UI testing.
+
+## 0.3.2 wire-contract correction
+
+The private owner UI input is not the same contract as a minimal public app-server text input. Text must include text_elements:[]; the observed Desktop renderer calls that field's some method without a null fallback. The owning bridge validates its frontend {method,result} envelope and unwraps result before returning via IPC. Consequently the method is on the outer IPC response, with payload under result.result. Start acceptance includes payload.turn.id; steer acceptance includes payload.turnId. Versions through 0.3.1 checked result.method incorrectly. A completed persisted native turn and a corresponding incoming Claude peer message established delivery despite that misleading error. No native content or proprietary assets are part of the regression fixtures.

@@ -2,6 +2,12 @@
 
 **Experimental preview · Windows x64 · VS Code Desktop.** A local tunnel between your **existing** Claude Code sessions and Codex threads. It does not create replacement chats, run a separate agent or manage an orchestration queue. Not affiliated with Anthropic, OpenAI or Microsoft.
 
+## Recovery from the 0.3.0/0.3.1 rendering failure
+
+A message sent with an older adapter may already have been processed and answered even though the tool said delivery unknown. Do not resend it. Versions through 0.3.1 omitted the UI text_elements array and checked the wrong response envelope. This could crash the native Desktop renderer while backend work continued.
+
+After installing 0.3.2, reload the owning Codex UI (for a VS Code owner: Developer: Reload Window), reopen the same existing thread, then retry the Desktop view. Reconnect/reload Session Mesh MCP in both harnesses so no old server process remains. The extension diagnoses native-view-needs-reload while malformed optimistic input remains cached and blocks further sends to that view. No provider transcript, binary or model history is patched by this repair. Existing-session read-only history reload alone did not clear the observed cache; UI recovery still requires verification after the owning UI reload.
+
 ## Minimal remote orchestration setup
 
 Use a remote-enabled Claude session as your phone entry point. Keep your existing Codex workers open locally in VS Code or Desktop. Both load the same user-wide Session Mesh MCP server and standards. Claude identifies itself, sends a task to an exact Codex ID, and asks the worker to explicitly send_message its result back to Claude. From the phone, continue that same Claude Remote Control session. Codex does not need its own mobile connection for this route. Both directions still require a live end-to-end test.
@@ -35,7 +41,7 @@ Hidden entries, online, idle, routeReady, owner application evidence and remote 
 
 Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
 
-1. Install `session-mesh-win32-x64-0.3.1.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
+1. Install `session-mesh-win32-x64-0.3.2.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
 2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
 3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
 4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.
