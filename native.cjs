@@ -4,6 +4,27 @@ const { randomUUID, createHash } = require('node:crypto');
 const { CodexIPC } = require('./ipc.cjs');
 const { BridgeState,routingStatus }=require('./bridge-state.cjs');
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+async function openCodexThread(id) {
+  if (!uuid.test(id)) throw Error('Invalid native Codex UUID');
+  if (process.platform !== 'win32') throw Error('Opening Codex threads requires local Windows');
+  const run = require('node:util').promisify(require('node:child_process').execFile);
+  // Only a validated UUID enters this fixed command; no prompt, path or caller URL.
+  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    `Start-Process -FilePath 'codex://threads/${id}' -WindowStyle Hidden -ErrorAction Stop`],
+    {windowsHide:true, timeout:10000, maxBuffer:4096});
+}
+function inProject(cwd,root){
+  const normalize=p=>path.win32.normalize(p).replace(/^\\\\\?\\UNC\\/i,'\\\\').replace(/^\\\\\?\\/,'').replace(/[\\/]+$/,'').toLowerCase();
+  const value=normalize(cwd||''),base=normalize(root);
+  return value===base||value.startsWith(base+'\\');
+}
+function readCodexMetadata(home){
+  let db;try{
+    const {DatabaseSync}=require('node:sqlite');
+    db=new DatabaseSync(path.join(home,'.codex','state_5.sqlite'),{readOnly:true});
+    return new Map(db.prepare('SELECT id, cwd, archived FROM threads').all().map(r=>[r.id,r]));
+  }catch{return new Map();}finally{db?.close();}
+}
 function alive(pid) { if (!Number.isInteger(pid) || pid < 1) return false; try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }
 function codexState(snapshot) {
   if (!snapshot) return 'unknown';
@@ -66,32 +87,68 @@ function resolveTarget(rows, target) {
   return matches[0];
 }
 class NativeMesh {
-  constructor({ home = os.homedir(), ipc = new CodexIPC(), limit = 100, state = new BridgeState() } = {}) { this.home = home; this.ipc = ipc; this.limit = limit; this.bridgeState=state; }
-  async list({ withState = true } = {}) {
+  constructor({ home = os.homedir(), ipc = new CodexIPC(), limit = 100, state = new BridgeState(), opener = openCodexThread, openTimeout = 20000 } = {}) { this.home = home; this.ipc = ipc; this.limit = limit; this.bridgeState=state; this.opener=opener; this.openTimeout=openTimeout; this.opening=new Map(); this.openQueue=Promise.resolve(); }
+  async openSession(id) {
+    if (typeof id !== 'string' || !id.startsWith('codex:') || !uuid.test(id.slice(6))) throw Error('Use an exact codex:<native-UUID> ID from list_sessions');
+    if (this.opening.has(id)) return this.opening.get(id);
+    const pending=this.openQueue.catch(()=>{}).then(()=>this.openExisting(id));
+    this.openQueue=pending;this.opening.set(id,pending);
+    try{return await pending;}finally{this.opening.delete(id);}
+  }
+  async openExisting(id) {
+    const row=(await this.list({withState:false,targetId:id})).find(r=>r.id===id);
+    if (!row || row.harness!=='codex') throw Error('Existing Codex thread not found in the discovery index; no opening attempted');
+    if(row.archived)throw Error('Archived Codex threads must be restored by the user before opening');
+    if (row.reachable) return {status:'already-online',...await this.inspect(id),detail:'Existing owner preserved. No navigation or message was sent.'};
+    // Do not navigate if ownership appeared since discovery.
+    let owner;try{owner=await this.ipc.owner(row.nativeId);}catch{}
+    if(owner?.handledByClientId)return {status:'already-online',...await this.inspect(id),detail:'Owner appeared before opening. No navigation or message was sent.'};
+    await this.opener(row.nativeId);
+    const deadline=Date.now()+this.openTimeout;
+    let last={id,name:row.name,online:false,available:false,state:'not-loaded',routeReady:false,routeBlock:'no-live-owner',ownerClientId:null};
+    do {
+      try {
+        const current=await this.ipc.owner(row.nativeId);
+        if(current?.handledByClientId){
+          const snapshot=await this.ipc.snapshot(row.nativeId,current.handledByClientId);
+          const state=codexState(snapshot),health=ownerViewHealth(snapshot);
+          const route=routingStatus({...row,reachable:true,ownerClientId:current.handledByClientId,...health},await this.bridgeState.read(),this.ipc.clientTypes?.get(current.handledByClientId));
+          last={id,name:row.name,online:true,available:state==='idle',state,ownerClientId:current.handledByClientId,...health,...route};
+          if(state!=='unknown')return {status:route.routeReady?'ready':'blocked',...last,detail:'Native owner observed after UI open request. No message was sent; opening is not a model or mobile receipt.'};
+        }
+      }catch{}
+      if(Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,Math.min(500,deadline-Date.now())));
+    }while(Date.now()<deadline);
+    return {status:'open-requested',...last,routeReady:false,routeBlock:last.online?'native-state-unknown':'no-live-owner',detail:'UI open requested, but readiness was not verified before timeout. No message was sent. Inspect before any retry; do not loop opening requests.'};
+  }
+  async list({ withState = true, projectPath, targetId } = {}) {
+    if(projectPath!==undefined&&(typeof projectPath!=='string'||!path.win32.isAbsolute(projectPath)))throw Error('project_path must be an absolute Windows project path');
     const bridge=await this.bridgeState.read();
     const claude = await readClaude(this.home);
     await Promise.all(claude.map(async r => { r.online = r.endpoint ? await probePipe(r.endpoint) : false; r.reachable = r.online; r.available = r.online && r.state === 'idle'; }));
     let text = ''; try { text = await fs.readFile(path.join(this.home, '.codex', 'session_index.jsonl'), 'utf8'); } catch {}
     const index = new Map(); for (const line of text.split('\n')) try { const r = JSON.parse(line); if (uuid.test(r.id)) index.set(r.id, r); } catch {}
-    const candidates = [...index.values()].sort((a,b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, this.limit);
+    const metadata=readCodexMetadata(this.home);
+    const candidates = [...index.values()].filter(r=>(!targetId||`codex:${r.id}`===targetId)&&(!projectPath||inProject(metadata.get(r.id)?.cwd||'',projectPath))).sort((a,b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, this.limit);
     let connected = false; try { await this.ipc.connect(); connected = true; } catch {}
     const codex = []; let next = 0;
     await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, async () => {
       while (next < candidates.length) {
         const r = candidates[next++];
-        const item = { id: `codex:${r.id}`, nativeId: r.id, name: r.thread_name || r.id, harness: 'codex', cwd: '', state: 'not-loaded', online: false, available: false, reachable: false, remote: 'unknown', source: 'saved-index', updatedAt: r.updated_at };
+        const saved=metadata.get(r.id);
+        const item = { id: `codex:${r.id}`, nativeId: r.id, name: r.thread_name || r.id, harness: 'codex', cwd: saved?.cwd||'', cwdSource:saved?.cwd?'saved-metadata':'unknown',archived:saved?Boolean(saved.archived):null, state: 'not-loaded', online: false, available: false, reachable: false, remote: 'unknown', source: 'saved-index', updatedAt: r.updated_at };
         if (connected) try {
           const owner = await this.ipc.owner(r.id); item.owner = owner.handledByClientId; item.ownerClientId=item.owner; item.online = item.reachable = true; item.source = 'live-owner'; item.state = 'unknown';
-          if (withState) { const snap = await this.ipc.snapshot(r.id, item.owner); item.state = codexState(snap); item.cwd = snap?.cwd || ''; item.available = item.state === 'idle'; Object.assign(item,ownerViewHealth(snap)); }
+          if (withState) { const snap = await this.ipc.snapshot(r.id, item.owner); item.state = codexState(snap); const cwd=snap?.cwd||snap?.environments?.[0]?.cwd;if(cwd){item.cwd=cwd;item.cwdSource='live-snapshot';} item.available = item.state === 'idle'; Object.assign(item,ownerViewHealth(snap)); }
         } catch {}
         codex.push(item);
       }
     }));
-    return [...claude, ...codex].map(row=>({...row,...routingStatus(row,bridge,this.ipc.clientTypes?.get(row.ownerClientId))})).sort((a,b) => Number(b.reachable)-Number(a.reachable) || a.name.localeCompare(b.name));
+    return [...claude, ...codex].filter(r=>!projectPath||inProject(r.cwd,projectPath)).map(row=>({...row,...routingStatus(row,bridge,this.ipc.clientTypes?.get(row.ownerClientId))})).sort((a,b) => Number(b.reachable)-Number(a.reachable) || a.name.localeCompare(b.name));
   }
   async send(targetId, text, sender = { id: 'human-via-vscode', name: 'VS Code user' }) {
     if (typeof text !== 'string' || !text.trim() || text.length > 60000) throw Error('Message empty or exceeds 60,000 characters');
-    const rows = await this.list({ withState: false }), target = resolveTarget(rows, targetId);
+    const rows = await this.list({ withState: false, targetId:targetId?.startsWith('codex:')?targetId:undefined }), target = resolveTarget(rows, targetId);
     if (!target.reachable) throw Error('Target has no live endpoint/owner. Open its existing thread in the provider UI.');
     if (sender.id === target.id) throw Error('Self-messaging is not allowed');
     const messageId = randomUUID();
@@ -120,7 +177,7 @@ class NativeMesh {
     return { messageId, to: target.id, status: 'accepted', ownerClientId:owner.handledByClientId,ownerApp:routing.ownerApp,remote:routing.remote, detail: 'Owning UI accepted request; not a model completion or mobile acknowledgement', ...receipt };
   }
   async inspect(targetId){
-    const row=resolveTarget(await this.list(),targetId);
+    const row=resolveTarget(await this.list({targetId}),targetId);
     return {id:row.id,name:row.name,harness:row.harness,online:row.online,available:row.available,state:row.state,uiState:row.uiState||'unknown',invalidTextInputs:row.invalidTextInputs||0,ownerClientId:row.ownerClientId||null,ownerApp:row.ownerApp,ownerEvidence:row.ownerEvidence,routeReady:row.routeReady,routeBlock:row.routeBlock,remote:row.remote,remoteCheckedAt:row.remoteCheckedAt,role:row.role};
   }
   async confirmDesktop(targetId,expectedOwner){
@@ -155,4 +212,4 @@ class NativeMesh {
   }
   close() { this.ipc.close(); }
 }
-module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth, ownerSteerParams };
+module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth, ownerSteerParams, openCodexThread, inProject, readCodexMetadata };

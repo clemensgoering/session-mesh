@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — Open existing Codex workers on demand
+
+- Adds identified MCP open_session and an extension action to open an exact saved Codex thread through the documented Desktop deep link. No task or message is sent by opening.
+- Waits for native ownership and a known state; reports ready, already-online, blocked or open-requested without forcing locks or starting replacement threads.
+- Preserves live owners, rejects archived/unknown targets, and coalesces duplicate opening requests within an MCP process.
+- Reads saved project paths from local Codex SQLite metadata in read-only mode. Optional list_sessions project_path filters the project and descendants before the recent-thread limit. Missing metadata remains unknown.
+- Updates orchestrator instructions for existing projects and on-demand opening. Native owner lifetime and MCP loading still depend on the provider.
+
+Validation: 30 automated tests; live opening changed existing Lademanagement and Vulkan Biom threads from not-loaded/no owner to idle/route-ready without sending a message; the second check used the identified MCP handler. Project-filtered discovery found 35 saved project threads; the first worker remained reachable after opening the second. No new end-to-end messaging or phone test was performed for this version.
+
+
 ## 0.3.4 — Preview documentation and distribution
 
 - Rewrites the English README around installation, explicit result reporting and a remote Claude orchestrator.

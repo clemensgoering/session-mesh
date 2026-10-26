@@ -1,6 +1,6 @@
 # Data handling
 
-Session Mesh does not implement analytics, telemetry, advertising or a remote backend. It does not start model processes. It connects to existing local Claude/Codex processes under the current OS user. The provider tools themselves contact their providers and may persist conversations or send their own telemetry under their existing settings. Messages injected into a session can enter that provider's model context and use its account quota.
+Session Mesh does not implement analytics, telemetry, advertising or a remote backend. It does not start its own model processes. It connects to local Claude/Codex processes under the current OS user. The explicit open_session action may launch/focus the provider Desktop app to open an existing Codex thread; that app may load its own session processes. The provider tools themselves contact their providers and may persist conversations or send their own telemetry under their existing settings. Messages injected into a session can enter that provider's model context and use its account quota.
 
 Discovery reads Claude's live session registry and Codex's recent session index, including names, IDs, workspace paths, status and provider remote-registration metadata. Codex state subscriptions temporarily receive the native conversation snapshot in memory to extract runtime status; it is not logged or saved. Same-user sessions discovered through MCP receive peer metadata across workspaces. Only use this integration among mutually trusted sessions.
 
@@ -13,3 +13,5 @@ Messages are sent only by an explicit UI send action or an MCP send_message call
 Stopping/uninstalling the extension does not stop provider sessions, remove provider histories or revoke sign-ins. Previously configured MCP runtime files and managed instruction blocks remain until explicitly removed as described in the README.
 
 Version 0.3 additionally stores Desktop owner attestations, routing mode, orchestrator ID, last connection-probe marker/metadata and historical user phone checks in bridge-state.json next to the stable runtime. These are shared with same-user MCP processes, contain native IDs/timestamps and are not cryptographic identity or current device-health evidence. The last 50 UI attempt metadata records are memory-only. Connection probes send a small user-triggered model prompt; no probes run automatically.
+
+Project discovery additionally reads only thread IDs, saved working directories and archive flags from the local Codex state database, opened read-only. Missing or incompatible metadata falls back to unknown; it never proves live ownership. The explicit open_session tool passes only a validated native UUID to the OS protocol handler, without prompt text or credentials.

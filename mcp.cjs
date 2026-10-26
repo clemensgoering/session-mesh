@@ -3,7 +3,8 @@ const readline = require('node:readline');
 const { NativeMesh, resolveTarget } = require('./native.cjs');
 const { STANDARDS } = require('./standards.cjs');
 const tools = [
-  { name: 'list_sessions', description: 'Discover existing native sessions, exact IDs, role, live owner, routeReady and separate remote evidence. Online/idle alone does not mean routed or remotely controllable. Default local routing does not require a Desktop confirmation. Desktop-only is an optional user policy. Results include standards.', inputSchema: { type:'object', properties:{}, additionalProperties:false } },
+  { name:'open_session',description:'Open one saved existing local Codex thread in the provider Desktop UI using its exact codex:<UUID> ID. Requires identify_session first. May launch/focus the app. Preserves live owners, creates no thread, sends no message and does not bypass locks. Check returned status and routeReady before a separate send_message. An open-requested timeout is not success; diagnose instead of blindly retrying.',inputSchema:{type:'object',properties:{id:{type:'string',pattern:'^codex:[a-fA-F0-9-]{36}$'}},required:['id'],additionalProperties:false}},
+  { name: 'list_sessions', description: 'Discover existing native sessions, exact IDs, project cwd, role, live owner, routeReady and remote evidence. Optional project_path filters to that absolute Windows directory and descendants before the recent Codex limit. Saved cwd is metadata, not proof of online status; missing metadata cannot establish project membership. No worker registration is needed for discovery. Results include standards.', inputSchema: { type:'object', properties:{project_path:{type:'string'}}, additionalProperties:false } },
   { name: 'identify_session', description: 'Bind this MCP connection to your own native session ID from list_sessions. Identity is self-reported, not proof or authorization. Call before sending. Cannot change identity in this connection.', inputSchema: { type:'object', properties:{ id:{type:'string'} }, required:['id'], additionalProperties:false } },
   { name: 'send_message', description: 'Deliver a delegation, question, result or blocker to an existing reachable session. At completion explicitly report to your designated orchestrator ID. Not a human approval. No automatic reply to acknowledgements; no blind retries on unknown delivery.', inputSchema: { type:'object', properties:{ to:{type:'string'}, message:{type:'string'} }, required:['to','message'], additionalProperties:false } },
   { name: 'mesh_standards', description: 'Read the shared addressing, delegation, reporting, security and delivery standards for all Session Mesh peers.', inputSchema: { type:'object', properties:{}, additionalProperties:false } },
@@ -14,7 +15,7 @@ function createHandler(mesh = new NativeMesh()) {
   return async m => {
     if (m.id === undefined) return;
     let result;
-    if (m.method === 'initialize') result = { protocolVersion:m.params?.protocolVersion || '2024-11-05', capabilities:{tools:{}}, serverInfo:{name:'session-mesh',version:'0.3.4'}, instructions:STANDARDS };
+    if (m.method === 'initialize') result = { protocolVersion:m.params?.protocolVersion || '2024-11-05', capabilities:{tools:{}}, serverInfo:{name:'session-mesh',version:'0.4.0'}, instructions:STANDARDS };
     else if (m.method === 'ping') result = {};
     else if (m.method === 'tools/list') result = {tools};
     else if (m.method === 'tools/call') {
@@ -22,9 +23,13 @@ function createHandler(mesh = new NativeMesh()) {
         const {name, arguments:a = {}} = m.params || {}; let value;
         if (name === 'mesh_standards') value = {standards:STANDARDS};
         else if(name==='diagnose_session')value=await mesh.inspect(a.id);
-        else if (name === 'list_sessions') value = {self:identity, identityAssurance:'self-reported', sessions:(await mesh.list()).map(({endpoint,owner,procStart,...s})=>s), standards:STANDARDS};
+        else if(name==='open_session'){
+          if(!identity)throw Error('Call identify_session with your own ID first');
+          value=await mesh.openSession(a.id);
+        }
+        else if (name === 'list_sessions') value = {self:identity, identityAssurance:'self-reported', sessions:(await mesh.list({projectPath:a.project_path})).map(({endpoint,owner,procStart,...s})=>s), standards:STANDARDS};
         else if (name === 'identify_session') {
-          const row = resolveTarget(await mesh.list({withState:false}), a.id);
+          const row = resolveTarget(await mesh.list({withState:false,targetId:typeof a.id==='string'&&a.id.startsWith('codex:')?a.id:undefined}), a.id);
           if (!row.reachable) throw Error('Your identity must be a live native session');
           if (identity && identity.id !== row.id) throw Error('Identity already bound for this MCP connection');
           identity = {id:row.id,name:row.name}; value = {self:identity, identityAssurance:'self-reported'};

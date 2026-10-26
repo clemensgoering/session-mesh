@@ -37,3 +37,7 @@ The private owner UI input is not the same contract as a minimal public app-serv
 ## 0.3.3 active-turn contract and live verification
 
 The private steer entry point dereferences restoreMessage.cwd and restoreMessage.context.workspaceRoots before it dispatches anything. Include a restoreMessage with the same client message ID, text, timestamp, native workspace context and empty attachment arrays. This is native UI recovery metadata; it does not override the running turn permissions or model. A new local end-to-end ping/pong and a separate active-turn steer completed successfully. A first pong attempt on 0.3.2 failed before dispatch due to missing recovery metadata; the idle retry was performed only after the failure and absent pong were verified. No claim of mobile delivery follows from these checks.
+
+## 0.4 existing-thread UI opening
+
+The explicit open_session action uses the documented codex://threads/<UUID> Desktop deep link through the OS protocol handler. It never calls a model resume/start API or registers ownership. It validates exact saved IDs, preserves live owners, rejects known archived threads and polls native owner/state after navigation. A local live test opened Lademanagement from unowned to idle and route-ready; opening sent no message. This does not establish keep-alive for multiple idle tabs, model receipt or phone access. Saved cwd/archive metadata is read from state_5.sqlite in read-only mode and cannot establish current ownership. See https://learn.chatgpt.com/docs/reference/commands .

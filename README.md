@@ -13,18 +13,18 @@ Connect **existing Claude Code sessions and Codex threads** through a local MCP 
 - Sets up shared MCP tools and communication instructions for both providers.
 - Marks an orchestrator and hides entries without deleting provider chats.
 
-Session Mesh does not create, resume or take ownership of provider threads. It has no durable queue, automatic replay or completion forwarding. Agents explicitly send results back. Provider approvals still apply.
+Session Mesh does not create provider threads, run its own worker processes or take ownership. Its explicit `open_session` tool can open an existing Codex thread in the provider Desktop UI. It has no durable queue, automatic replay or completion forwarding. Agents explicitly send results back. Provider approvals still apply.
 
 ## Requirements
 
-Local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in Claude Code and Codex. Keep the participating sessions running. A trusted local workspace is required; Remote SSH/WSL extension hosts and virtual workspaces are unsupported.
+Local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in Claude Code and Codex. On-demand opening also requires the Codex Desktop app with its registered `codex://` handler. Keep participating sessions running once opened. A trusted local workspace is required; Remote SSH/WSL extension hosts and virtual workspaces are unsupported.
 
 The native transports are private and version-sensitive. Provider updates may break compatibility. No provider binaries or credentials are bundled. This project is not affiliated with Anthropic, OpenAI or Microsoft.
 
 ## Installation
 
 1. Download the VSIX from [GitHub Releases](https://github.com/clemensgoering/session-mesh/releases). In VS Code, choose **Extensions → … → Install from VSIX**.
-2. Open **Session Mesh** in the Activity Bar. Refresh after opening additional sessions. Discovery considers the latest 100 indexed Codex threads; a saved thread alone is not reachable.
+2. Open **Session Mesh** in the Activity Bar. Refresh after opening additional sessions. Discovery considers the latest 100 indexed Codex threads; an MCP `project_path` filter is applied before that limit. A saved thread alone is not reachable.
 3. Run **Session Mesh: Set up tools and standards**. Choose user-wide setup for use across projects, or project-only setup. Set `sessionMesh.nodePath` if Node is installed elsewhere.
 4. Reconnect/reload MCP and instructions in both providers. Reopen the same existing threads if necessary. Accept native MCP trust prompts. A VSIX upgrade cannot hot-load tools into existing MCP processes.
 5. Check `routeReady: true` and copy the full `claude:<native-id>` or `codex:<native-id>` IDs. Names can collide; Claude registry names can differ from tab titles.
@@ -34,7 +34,7 @@ The native transports are private and version-sensitive. Provider updates may br
 Keep VS Code with Session Mesh running and both provider sessions open. Default routing accepts the actual live Codex owner in VS Code or Desktop; Desktop confirmation is not required.
 
 1. Right-click the Claude session and choose **Mark as orchestrator**.
-2. Give Claude the exact Codex worker ID and task. Ask it to identify itself, send the task through Session Mesh and request an explicit result addressed to its own ID.
+2. Ask Claude to discover existing workers with the project root, identify itself and open suitable saved workers with `open_session`. It then sends tasks and requests explicit results addressed to its own ID.
 3. Give workers the instruction below, replacing the placeholder with Claude's actual native ID.
 4. Enable Claude's own Remote Control and continue that same Claude session from your phone. Keep the PC and participating sessions running. Codex workers do not need separate mobile access for this workflow.
 
@@ -56,12 +56,16 @@ Start with discovery:
 2. Establish your own native Claude session ID from your session context and
    register it with identify_session. If you cannot determine it reliably, ask me
    once. Never claim another session's identity.
-3. Find this project's existing Codex sessions. Use full codex:<native-id> IDs,
-   because names can collide. Check project membership using available metadata;
-   ask if it is ambiguous.
-4. Use only reachable targets with routeReady: true. Prefer sessions positively
-   observed idle. Use diagnose_session to explain blocked routes. Do not create,
-   start or resume replacement sessions.
+3. Find this project's existing Codex sessions with list_sessions and project_path
+   set to the absolute project root. This includes saved workers in nested folders.
+   No worker registration is required. Use full codex:<native-id> IDs, because
+   names can collide. Check cwd/cwdSource; ask if project membership is ambiguous.
+4. You may open suitable saved workers for this task with open_session and their
+   exact Codex IDs. Open only workers needed for the assignment, one at a time.
+   It opens the same thread in Desktop and sends no message. Use only targets
+   with routeReady: true and a known state afterward; prefer idle workers. For
+   blocked or open-requested results, diagnose and report the limitation instead
+   of repeatedly opening. Do not create replacement sessions or bypass locks.
 
 First run a small communication test with one suitable Codex session. Use
 send_message to send the following, substituting a unique reference and your
@@ -103,14 +107,42 @@ that worker identifies itself. The worker must identify itself on its own MCP
 connection before sending a reply.
 
 `identify_session` does not open, activate or keep a thread running. A saved thread
-reported as `not-loaded` with no active owner cannot receive messages. Open that
-same existing thread in Codex, refresh discovery and check `routeReady`.
-The bridge does not start or resume it. Missing tools require MCP setup/reconnection;
-missing native ownership requires an active provider session.
+reported as `not-loaded` with no active owner cannot receive messages yet. Claude
+can explicitly call `open_session` for that exact existing Codex thread, then check
+the result before sending. Missing tools still require MCP setup/reconnection.
 
 With MCP and shared instructions already loaded, Claude can include the return
 instructions in its first task; a separate worker startup prompt is optional.
 Never infer that a Claude-to-Claude test proves the Codex return path works.
+
+### Open existing workers on demand
+
+This also works in an established project; workers do not have to announce
+themselves first. After identifying itself, Claude can:
+
+1. Call `list_sessions` with `project_path` set to the absolute project root.
+   Saved working directories come from the local Codex metadata database opened
+   read-only. `cwdSource` distinguishes saved metadata from live snapshots.
+   Missing metadata cannot establish project membership; ask rather than guess.
+2. Call `open_session` with one exact `codex:<native-UUID>` ID from discovery.
+   Session Mesh uses the documented [existing-thread deep link](https://learn.chatgpt.com/docs/reference/commands)
+   and waits up to about 20 seconds for a native owner and known turn state.
+3. Check `routeReady` and state, then call `send_message` separately with the task
+   and Claude's exact return ID. The worker identifies itself before replying.
+
+`ready` means a routable owner with a known state was observed. `already-online`
+preserves an existing owner without navigating; still check readiness and state.
+`blocked` means an owner was observed but routing checks failed. `open-requested`
+means the UI launch was requested but readiness was not verified before timeout;
+inspect instead of blindly repeating it. No opening status proves model receipt.
+
+Opening may launch/focus Desktop or switch its current view. It does not guarantee
+that many idle threads stay loaded after navigation. Open and dispatch one worker
+at a time, then recheck the next target. Live owners are preserved, native locks
+are respected, and archived threads require user restoration. There is no
+background worker pool or forced keep-alive. A local live test opened the saved
+“Lademanagement” thread from `not-loaded` to an observed idle, route-ready owner
+without sending a message.
 
 ### Copy-and-paste Codex worker prompt
 
@@ -165,6 +197,7 @@ here; do not claim that the orchestrator received anything.
 | --- | --- |
 | `list_sessions` | Find sessions, reachability, availability and orchestrator role. |
 | `identify_session` | Pin your own native ID for this MCP connection before sending. |
+| `open_session` | Open one saved Codex thread in Desktop and check readiness, without sending a message. Requires identification. |
 | `send_message` | Send a task, question or result to an exact session ID. |
 | `diagnose_session` | Inspect the owner and blocked routes without sending. |
 | `mesh_standards` | Read the shared communication rules. |
@@ -186,7 +219,7 @@ Optional Desktop-only routing and manual Desktop/phone confirmations support tes
 ## Troubleshooting
 
 - **Missing tools or transport closed:** reconnect Session Mesh MCP in that provider. Running MCP processes may retain the old version after an upgrade.
-- **Saved thread offline:** open the same thread in its provider UI and refresh. The bridge does not start substitute sessions.
+- **Saved Codex thread offline:** use `open_session` for its exact ID, or open it manually, then check readiness. The bridge does not start substitute sessions.
 - **Route blocked:** use `diagnose_session` and check the owner and routing mode.
 - **Native view needs reload:** versions through 0.3.1 could leave malformed UI input cached. Reload the owning UI and reopen the same thread. A message may already have been processed; inspect history before resending.
 - **Unclear delivery:** check recipient history and request a referenced result; do not blindly retry.

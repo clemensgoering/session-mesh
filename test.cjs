@@ -122,3 +122,42 @@ test('busy UI steer carries the native restoreMessage and workspace context cont
   assert.equal(p.restoreMessage.cwd,'D:/actual');assert.deepEqual(p.restoreMessage.context.workspaceRoots,['D:/actual']);assert.equal(p.restoreMessage.context.prompt,'test');assert.equal(p.restoreMessage.id,p.clientUserMessageId);assert.deepEqual(p.attachments,[]);
   const unknown=ownerSteerParams('existing-thread',[ownerText('test')],'test','message',{});assert.deepEqual(unknown.restoreMessage.context.workspaceRoots,[]);assert.equal(unknown.restoreMessage.cwd,undefined);
 });
+
+test('open_session requires identity and uses an exact existing Codex ID',async()=>{
+ const id='codex:11111111-1111-1111-1111-111111111111';let opened=0;
+ const handle=createHandler({list:async()=>[{id:'claude:self',name:'self',reachable:true}],openSession:async value=>{assert.equal(value,id);opened++;return {status:'ready',routeReady:true}}});
+ const call=(name,args)=>handle({id:1,method:'tools/call',params:{name,arguments:args}});
+ assert.equal((await call('open_session',{id})).result.isError,true);assert.equal(opened,0);
+ await call('identify_session',{id:'claude:self'});assert.equal((await call('open_session',{id})).result.isError,undefined);assert.equal(opened,1);
+});
+test('opening rejects names, URLs, new threads, unknown and archived targets without launching',async()=>{
+ let opened=0;const mesh=new NativeMesh({opener:async()=>{opened++}});mesh.list=async()=>[];
+ for(const id of ['name','codex:new','codex://threads/new','claude:11111111-1111-1111-1111-111111111111',"codex:11111111-1111-1111-1111-111111111111';calc"]){await assert.rejects(mesh.openSession(id),/exact/)}
+ const id='codex:11111111-1111-1111-1111-111111111111';await assert.rejects(mesh.openSession(id),/not found/);
+ mesh.list=async()=>[{id,harness:'codex',archived:true}];await assert.rejects(mesh.openSession(id),/Archived/);assert.equal(opened,0);
+});
+test('opening preserves a live owner and never navigates or sends',async()=>{
+ let opened=0;const mesh=new NativeMesh({opener:async()=>{opened++}}),id='codex:11111111-1111-1111-1111-111111111111';mesh.list=async()=>[{id,harness:'codex',reachable:true}];mesh.inspect=async()=>({id,routeReady:true,state:'busy'});
+ assert.equal((await mesh.openSession(id)).status,'already-online');assert.equal(opened,0);
+});
+test('opening waits for the actual native owner without starting a turn; duplicate opens coalesce',async()=>{
+ const id='codex:11111111-1111-1111-1111-111111111111';let launched=false,opens=0;const mesh=new NativeMesh({openTimeout:30,opener:async native=>{assert.equal(native,id.slice(6));opens++;launched=true},state:{read:async()=>({codexMode:'any-owner'})},ipc:{owner:async()=>{if(!launched)throw Error('no owner');return {handledByClientId:'native'}},snapshot:async()=>({threadRuntimeStatus:{type:'idle'}})}});
+ mesh.list=async()=>[{id,nativeId:id.slice(6),harness:'codex',name:'existing',reachable:false}];const [a,b]=await Promise.all([mesh.openSession(id),mesh.openSession(id)]);assert.equal(opens,1);assert.equal(a.status,'ready');assert.equal(a.ownerClientId,'native');assert.equal(a.routeReady,true);assert.deepEqual(a,b);
+});
+test('open timeout and corrupt owner view never claim readiness',async()=>{
+ const id='codex:11111111-1111-1111-1111-111111111111';let launched=false;
+ const mesh=new NativeMesh({openTimeout:1,opener:async()=>{launched=true},state:{read:async()=>({codexMode:'any-owner'})},ipc:{owner:async()=>{throw Error('no owner')}}});mesh.list=async()=>[{id,nativeId:id.slice(6),harness:'codex',reachable:false}];
+ const timeout=await mesh.openSession(id);assert.equal(timeout.status,'open-requested');assert.equal(timeout.routeReady,false);assert.equal(launched,true);
+ launched=false;mesh.ipc={owner:async()=>{if(!launched)throw Error('no owner');return {handledByClientId:'native'}},snapshot:async()=>({threadRuntimeStatus:{type:'idle'},params:{input:[{type:'text',text:'old'}]}})};
+ const blocked=await mesh.openSession(id);assert.equal(blocked.status,'blocked');assert.equal(blocked.routeReady,false);assert.equal(blocked.routeBlock,'native-view-needs-reload');
+});
+test('saved project metadata filters before the recent thread limit and does not imply online',async()=>{
+ const {DatabaseSync}=require('node:sqlite');const {inProject}=require('./native.cjs');assert.equal(inProject('D:\\Game\\Assets','d:\\game'),true);assert.equal(inProject('D:\\GameCopy','D:\\Game'),false);assert.equal(inProject('\\\\?\\D:\\Game\\Assets','D:\\Game'),true);
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-project-'));try{
+ await fs.mkdir(path.join(dir,'.codex'));const ids=['11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222'];
+ await fs.writeFile(path.join(dir,'.codex/session_index.jsonl'),ids.map((id,i)=>JSON.stringify({id,thread_name:'saved',updated_at:String(i)})).join('\n'));
+ const db=new DatabaseSync(path.join(dir,'.codex/state_5.sqlite'));db.exec('CREATE TABLE threads(id TEXT,cwd TEXT,archived INTEGER)');const insert=db.prepare('INSERT INTO threads VALUES(?,?,?)');insert.run(ids[0],'D:\\Game\\Assets',0);insert.run(ids[1],'D:\\Other',0);db.close();
+ const mesh=new NativeMesh({home:dir,limit:1,ipc:{connect:async()=>{throw Error('offline')}}});const rows=await mesh.list({projectPath:'D:\\Game'});assert.equal(rows.length,1);assert.equal(rows[0].nativeId,ids[0]);assert.equal(rows[0].cwdSource,'saved-metadata');assert.equal(rows[0].online,false);assert.equal(rows[0].routeReady,false);
+ await assert.rejects(mesh.list({projectPath:'relative'}),/absolute/);
+ }finally{await fs.rm(dir,{recursive:true,force:true})}
+});
