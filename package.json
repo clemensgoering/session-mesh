@@ -1,8 +1,8 @@
 {
   "name": "session-mesh",
   "displayName": "Session Mesh",
-  "description": "Tunnel zwischen vorhandenen Claude- und Codex-Sitzungen mit nativer Erkennung und gemeinsamen Nachrichtenwerkzeugen",
-  "version": "0.3.3",
+  "description": "Connect existing Claude Code and Codex sessions through a local MCP messaging bridge.",
+  "version": "0.3.4",
   "publisher": "local-lab",
   "engines": {
     "vscode": "^1.94.0"
@@ -39,65 +39,65 @@
     "commands": [
       {
         "command": "sessionMesh.refresh",
-        "title": "Session Mesh: Vorhandene Sessions aktualisieren",
+        "title": "Session Mesh: Refresh existing sessions",
         "icon": "$(refresh)"
       },
       {
         "command": "sessionMesh.desktopGuide",
-        "title": "Session Mesh: Desktop-/Handy-Ablauf anzeigen",
+        "title": "Session Mesh: Show desktop and phone workflow",
         "icon": "$(device-mobile)"
       },
       {
         "command": "sessionMesh.confirmDesktop",
-        "title": "Session Mesh: Desktop-Besitzer best?tigen"
+        "title": "Session Mesh: Confirm desktop owner"
       },
       {
         "command": "sessionMesh.probe",
-        "title": "Session Mesh: Verbindungstest senden"
+        "title": "Session Mesh: Send connection test"
       },
       {
         "command": "sessionMesh.confirmMobile",
-        "title": "Session Mesh: Handy-Empfang best?tigen"
+        "title": "Session Mesh: Confirm phone receipt"
       },
       {
         "command": "sessionMesh.orchestrator",
-        "title": "Session Mesh: Als Orchestrator markieren",
+        "title": "Session Mesh: Mark as orchestrator",
         "icon": "$(star-full)"
       },
       {
         "command": "sessionMesh.routingMode",
-        "title": "Session Mesh: Codex-Routing w?hlen"
+        "title": "Session Mesh: Choose Codex routing mode"
       },
       {
         "command": "sessionMesh.diagnostics",
-        "title": "Session Mesh: Diagnose und Zustellversuche anzeigen"
+        "title": "Session Mesh: Show diagnostics and delivery attempts"
       },
       {
         "command": "sessionMesh.setup",
-        "title": "Session Mesh: Werkzeuge und Standards einrichten",
+        "title": "Session Mesh: Set up tools and standards",
         "icon": "$(plug)"
       },
       {
         "command": "sessionMesh.remove",
-        "title": "Session Mesh: Aus Session Mesh entfernen",
+        "title": "Session Mesh: Hide session",
         "icon": "$(trash)"
       },
       {
         "command": "sessionMesh.restore",
-        "title": "Session Mesh: Ausgeblendete Sessions wieder anzeigen"
+        "title": "Session Mesh: Restore hidden sessions"
       },
       {
         "command": "sessionMesh.copyId",
-        "title": "Session Mesh: Session-ID kopieren",
+        "title": "Session Mesh: Copy session ID",
         "icon": "$(copy)"
       },
       {
         "command": "sessionMesh.open",
-        "title": "Session Mesh: Sessiondetails ?ffnen"
+        "title": "Session Mesh: Open session details"
       },
       {
         "command": "sessionMesh.send",
-        "title": "Session Mesh: Nachricht an vorhandene Session senden"
+        "title": "Session Mesh: Send message to existing session"
       }
     ],
     "menus": {
@@ -186,7 +186,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Session Mesh starts local AI harness processes and requires a trusted workspace."
+      "description": "Session Mesh connects to local provider sessions and requires a trusted workspace."
     },
     "virtualWorkspaces": {
       "supported": false,

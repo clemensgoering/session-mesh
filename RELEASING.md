@@ -2,9 +2,13 @@
 
 ## Current status
 
-The source repository is https://github.com/clemensgoering/session-mesh . Version 0.3.3 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
+The source repository is https://github.com/clemensgoering/session-mesh . Version 0.3.4 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
 
-## Before a public listing
+## GitHub preview releases
+
+GitHub previews may retain the existing `local-lab` identity. Run check, tests, audit and packaging; inspect the VSIX and publish it with a SHA-256 checksum and explicit limitations. Mark the GitHub release as a prerelease. This does not satisfy Marketplace gates. Never publish local evidence files, configuration backups or credentials.
+
+## Before a Marketplace listing
 
 1. Set the real Marketplace `publisher` in package.json. `local-lab` is deliberately only a local placeholder; changing publisher changes extension identity.
 2. Set real HTTPS `repository.url`, `homepage`, and `bugs.url`. Enable private vulnerability reporting and add the actual security contact to SECURITY.md. Confirm project name availability and rights to distributed assets. The MIT license covers this project's source, not third-party binaries.

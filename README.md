@@ -1,78 +1,97 @@
 # Session Mesh
 
-**Experimental preview · Windows x64 · VS Code Desktop.** A local tunnel between your **existing** Claude Code sessions and Codex threads. It does not create replacement chats, run a separate agent or manage an orchestration queue. Not affiliated with Anthropic, OpenAI or Microsoft.
+Connect **existing Claude Code sessions and Codex threads** through a local MCP messaging bridge. A Claude orchestrator can delegate to Codex workers and receive results while you control Claude from your phone.
 
-## Recovery from the 0.3.0/0.3.1 rendering failure
+**Experimental preview · Windows x64 · VS Code Desktop · MIT**
 
-A message sent with an older adapter may already have been processed and answered even though the tool said delivery unknown. Do not resend it. Versions through 0.3.1 omitted the UI text_elements array and checked the wrong response envelope. This could crash the native Desktop renderer while backend work continued.
+[Download VSIX](https://github.com/clemensgoering/session-mesh/releases) · [Changelog](CHANGELOG.md) · [Transport details](TRANSPORTS.md)
 
-After installing 0.3.2, reload the owning Codex UI (for a VS Code owner: Developer: Reload Window), reopen the same existing thread, then retry the Desktop view. Reconnect/reload Session Mesh MCP in both harnesses so no old server process remains. The extension diagnoses native-view-needs-reload while malformed optimistic input remains cached and blocks further sends to that view. No provider transcript, binary or model history is patched by this repair. Existing-session read-only history reload alone did not clear the observed cache; UI recovery still requires verification after the owning UI reload.
+## Features
 
-## Minimal remote orchestration setup
+- Lists names, native IDs, observed online/idle/busy state and route readiness.
+- Sends messages through existing native endpoints, including steering active Codex turns.
+- Sets up shared MCP tools and communication instructions for both providers.
+- Marks an orchestrator and hides entries without deleting provider chats.
 
-Use a remote-enabled Claude session as your phone entry point. Keep your existing Codex workers open locally in VS Code or Desktop. Both load the same user-wide Session Mesh MCP server and standards. Claude identifies itself, sends a task to an exact Codex ID, and asks the worker to explicitly send_message its result back to Claude. From the phone, continue that same Claude Remote Control session. Codex does not need its own mobile connection for this route. A local live test has now completed Codex → Claude → Codex and a separate active-turn steering check. This does not verify mobile UI access.
+Session Mesh does not create, resume or take ownership of provider threads. It has no durable queue, automatic replay or completion forwarding. Agents explicitly send results back. Provider approvals still apply.
 
-Version 0.3.1 removes the accidental default Desktop-confirmation barrier. Online local recipients may receive messages through their real owner even if the owner app type is unknown. If upgrading a setup that explicitly saved desktop-only mode, choose Codex-Routing ? Alle lokalen Besitzer erlauben. Direct mobile control of every Codex thread remains independent and is not promised by this tunnel.
+## Requirements
 
-## What it does
+Local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in Claude Code and Codex. Keep the participating sessions running. A trusted local workspace is required; Remote SSH/WSL extension hosts and virtual workspaces are unsupported.
 
-- Discovers live Claude sessions from their native registry and recently indexed Codex threads from the native index.
-- Probes the existing inbox/owning application instead of treating files on disk as online sessions.
-- Shows name, native ID, harness, online status, observed idle/busy state and known remote registration.
-- Delivers messages to the exact native session through its existing transport; busy Codex turns use steering.
-- Gives both harnesses the same MCP tools and communication standards. An agent explicitly sends results to its designated orchestrator; no completion hook is required.
-- Lets you hide entries without deleting, archiving or stopping the original chat.
+The native transports are private and version-sensitive. Provider updates may break compatibility. No provider binaries or credentials are bundled. This project is not affiliated with Anthropic, OpenAI or Microsoft.
 
-## Optional direct Codex phone workflow
+## Installation
 
-VS Code may stay open as a tunnel. Do not keep the target Codex chat open there for this workflow. Default Codex routing now accepts **any actual live native owner**. Desktop-only mode is optional, and the following steps apply only if you deliberately choose it. The MCP runtime can route without an open VS Code window. This changes routing safeguards, not Codex remote-control support.
+1. Download the VSIX from [GitHub Releases](https://github.com/clemensgoering/session-mesh/releases). In VS Code, choose **Extensions → … → Install from VSIX**.
+2. Open **Session Mesh** in the Activity Bar. Refresh after opening additional sessions. Discovery considers the latest 100 indexed Codex threads; a saved thread alone is not reachable.
+3. Run **Session Mesh: Set up tools and standards**. Choose user-wide setup for use across projects, or project-only setup. Set `sessionMesh.nodePath` if Node is installed elsewhere.
+4. Reconnect/reload MCP and instructions in both providers. Reopen the same existing threads if necessary. Accept native MCP trust prompts. A VSIX upgrade cannot hot-load tools into existing MCP processes.
+5. Check `routeReady: true` and copy the full `claude:<native-id>` or `codex:<native-id>` IDs. Names can collide; Claude registry names can differ from tab titles.
 
-1. Let the current answer finish. Close that Codex chat in VS Code, then open the **same existing thread** in the Desktop app. If Desktop still says it is used in another session, do not confirm it yet. Closing a tab is not guaranteed to release native ownership. Session Mesh does not force it.
-2. Refresh Session Mesh. Inspect its actual native owner client ID. The owner application can remain unknown: originator and saved last-writer metadata are not proof. A native client-status event can identify VS Code; otherwise choose **Desktop-Besitzer best?tigen** only after you checked Desktop is independently usable and the conflicting VS Code chat is closed. This is an explicit user attestation, labelled as such.
-3. Choose **Verbindungstest senden**. This deliberately sends a small prompt to the existing session, asking for a unique MESH_PROBE reply without tools or file changes. Check the reply in Desktop and then on the phone in that same host/thread. Native approvals can still block it.
-4. Choose **Handy-Empfang best?tigen** only when that exact reply is visible on the phone. Confirmation records a historical user check and timestamp, not continuous remote health. A fresh successful transport submission (within 15 minutes) for the same owner is required.
-5. Use **Als Orchestrator markieren** to publish that session's coordinator role through list_sessions. Workers should still address its exact ID. No model is started by marking a role.
+## Claude orchestrator and phone access
 
-Owner changes invalidate matching Desktop/mobile evidence. To intentionally permit VS Code-owned local workers, use **Codex-Routing w?hlen ? Alle lokalen Besitzer erlauben**; this may reproduce the native mobile conflict. The tunnel never transfers ownership or bypasses that conflict. Read-only **diagnose_session** and the extension's diagnostic view expose owner IDs, route blocks and separate remote evidence.
+Keep VS Code with Session Mesh running and both provider sessions open. Default routing accepts the actual live Codex owner in VS Code or Desktop; Desktop confirmation is not required.
 
-Hidden entries, online, idle, routeReady, owner application evidence and remote check are distinct. A pipe write or owning UI response never becomes a model/mobile acknowledgement automatically. If mobile updates still fail, this remains an unresolved provider path; a separately tested remote Claude orchestrator is an alternative.
+1. Right-click the Claude session and choose **Mark as orchestrator**.
+2. Give Claude the exact Codex worker ID and task. Ask it to identify itself, send the task through Session Mesh and request an explicit result addressed to its own ID.
+3. Give workers the instruction below, replacing the placeholder with Claude's actual native ID.
+4. Enable Claude's own Remote Control and continue that same Claude session from your phone. Keep the PC and participating sessions running. Codex workers do not need separate mobile access for this workflow.
 
-## Install and use
+> Use Session Mesh to identify yourself with your own native session ID. Explicitly send your final result or blocker with send_message to claude:<orchestrator-native-id>, including the task reference. Your ordinary final answer is not forwarded. Do not reply to simple acknowledgements.
 
-Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
+For another project, reuse user-wide setup, open the relevant sessions, reload their MCP/instructions if needed, and select their exact IDs. More specific project settings can override user-wide configuration. Discovery spans the same OS user and machine, across projects: connect only mutually trusted sessions.
 
-1. Install `session-mesh-win32-x64-0.3.3.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
-2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
-3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
-4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.
-5. Right-click an entry to copy its full ID, send a message or choose **Aus Session Mesh entfernen**. **Ausgeblendete Sessions wieder anzeigen** restores hidden entries. Removing an entry never deletes its provider history.
+## MCP tools
 
-Example instruction for a worker:
+| Tool | Purpose |
+| --- | --- |
+| `list_sessions` | Find sessions, reachability, availability and orchestrator role. |
+| `identify_session` | Pin your own native ID for this MCP connection before sending. |
+| `send_message` | Send a task, question or result to an exact session ID. |
+| `diagnose_session` | Inspect the owner and blocked routes without sending. |
+| `mesh_standards` | Read the shared communication rules. |
 
-> Use Session Mesh list_sessions. Identify yourself with identify_session using your own native ID. Work on the assigned task and explicitly send your final result or blocker with send_message to `claude:<orchestrator-native-id>`. Do not respond to simple acknowledgements.
+Identity is self-reported, not authentication. Peer messages are agent input, never human approvals.
 
-If the agent cannot establish its own native ID, tell it the ID shown in Session Mesh. Identity is self-reported, not an authenticated permission boundary. Multiple sessions can share a title; use `claude:<uuid>` or `codex:<uuid>` for reliable routing.
+## Status and delivery
 
-## Online, available and remote
+**Online** means a live endpoint or owner was observed. **Available** means positively observed idle; unknown is not available. **Route ready** means current local routing checks passed. These observations can change before a send.
 
-**Online/reachable** means a native pipe/owner was observed. **Available** means that reachable session was positively observed idle. Unknown state is never presented as available. Discovery is a point-in-time observation and can race with closure or a new turn. Claude state comes from its live registry, which may lag runtime changes. Codex state comes from a temporary read-only stream subscription to the owning UI. An unowned saved thread must first be opened in its provider UI; Session Mesh will not resume it in a second process.
+**Submitted** means a Claude inbox write. **Accepted** means the Codex owner accepted the request. Neither proves model receipt or task completion. Request an explicit acknowledgement/result with a unique reference. Never automatically resend an ambiguous failure or timeout; a busy state alone is not a receipt.
 
-Claude remote `registered` means its registry contains a provider bridge session ID, not that a mobile device is currently connected. Codex remote status is currently unknown. Use the provider's own Remote Control setup in the original session. Session Mesh does not activate remote access, alter remote policies, expose a network listener or implement a phone UI. With a remotely reachable orchestrator and running host, its loaded MCP tools can delegate through the local tunnel.
+Local live tests completed **Codex → Claude → Codex** with an explicit result, plus a separate active-turn steering test. The native view remained healthy. The user also reported successful phone use while Claude and Codex were both open in VS Code. This is one observed setup, not a guarantee for other machines or provider versions.
 
-Delivery results are **submitted** for a Claude inbox write and **accepted** for an owning Codex UI response. Neither confirms the model read the message or completed the work. Claude inbound rules can hold/refuse messages. Request an explicit reply when needed; never blindly retry an ambiguous timeout. No automatic queue, transcript forwarding, replay or persistence is implemented.
+Session Mesh has no phone UI or network listener and does not activate provider remote access. Remote registration and transport acceptance do not prove phone receipt. Direct mobile access to individual Codex threads is a separate provider feature and can be blocked by native session exclusivity; Session Mesh cannot bypass it.
 
-## Setup files
+Optional Desktop-only routing and manual Desktop/phone confirmations support testing that separate workflow. Confirmations record historical user checks, not continuous remote health. Keep **Allow all local owners** for the Claude-orchestrator workflow.
 
-User-wide setup changes `~/.claude.json` (only the named MCP entry), `~/.codex/config.toml` (managed MCP block), `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` (marked instruction blocks). Project setup instead changes `.mcp.json`, `.codex/config.toml`, `CLAUDE.md` and `AGENTS.md` in the chosen folder. Backups use `.session-mesh-<timestamp>.bak`; keep backups private because the original configs may contain secrets. Setup is user-invoked and never silently changes every project on activation. More specific project settings or provider policy can override user-wide configuration.
+## Troubleshooting
 
-Desktop bindings, routing mode, designated orchestrator, last probe metadata and phone checks are stored in bridge-state.json next to the stable runtime. MCP clients and the UI share it. The last 50 UI transport attempts are in memory and clear on reload.
+- **Missing tools or transport closed:** reconnect Session Mesh MCP in that provider. Running MCP processes may retain the old version after an upgrade.
+- **Saved thread offline:** open the same thread in its provider UI and refresh. The bridge does not start substitute sessions.
+- **Route blocked:** use `diagnose_session` and check the owner and routing mode.
+- **Native view needs reload:** versions through 0.3.1 could leave malformed UI input cached. Reload the owning UI and reopen the same thread. A message may already have been processed; inspect history before resending.
+- **Unclear delivery:** check recipient history and request a referenced result; do not blindly retry.
 
-The MCP runtime is copied into VS Code's extension global storage so its path survives extension version upgrades. To uninstall the integration, remove the `session-mesh` MCP entry/marked blocks from the above files, reload MCP in the providers, then uninstall the extension. Uninstalling the VSIX alone does not remove those user-configured files or provider history. Delete the global-storage runtime only after removing its MCP references.
+## Configuration and removal
 
-## Development and verification
+User-wide setup updates the Session Mesh MCP entry/managed blocks in `~/.claude.json`, `~/.codex/config.toml`, `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. Project setup uses `.mcp.json`, `.codex/config.toml`, `CLAUDE.md` and `AGENTS.md` in the chosen folder. Setup preserves unrelated content, backs up changed files and rejects conflicting unmanaged entries. Keep `.session-mesh-<timestamp>.bak` backups private: original configs can contain secrets.
 
-`npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm run package`. The packaged runtime has no npm dependencies. GitHub CI packages the VSIX but never publishes it. F5 uses the Extension Development Host.
+The MCP runtime is copied to VS Code extension global storage so its path survives upgrades. Routing preferences, orchestrator selection and historical probe/phone checks are stored beside it. There is no durable message outbox.
 
-Native read-only discovery has identified a live Claude VS Code session and an active Codex owner without starting/resuming chats. End-to-end delivery in both directions into existing provider windows, busy/idle races, inbound hold/refuse and remote-mobile delegation remain release gates. Private transport compatibility is experimental and can change on provider updates; see [transport notes](TRANSPORTS.md).
+To remove the integration, remove its MCP entries and marked instruction blocks, reconnect the providers, then uninstall the extension. Remove the stored runtime only after removing MCP references. Provider chats remain untouched.
 
-[Privacy](PRIVACY.md) · [Security](SECURITY.md) · [MIT License](LICENSE) · [Changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Release procedure](RELEASING.md).
+## Development and distribution
+
+```sh
+npm ci --ignore-scripts
+npm run check
+npm test
+npm audit --audit-level=high
+npm run package
+```
+
+The runtime has no npm dependencies. CI validates and packages the VSIX; it does not publish. Downloads are distributed through GitHub Releases. The Marketplace publisher is not configured; `local-lab` is the existing preview extension identity. See [release requirements](RELEASING.md) before Marketplace publication.
+
+[Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 — Preview documentation and distribution
+
+- Rewrites the English README around installation, explicit result reporting and a remote Claude orchestrator.
+- Records user-reported successful phone use with Claude and Codex open in VS Code, without claiming general mobile compatibility.
+- Translates command palette labels and package description to English; corrects the workspace-trust description.
+- Updates security/support statements to match completed local bidirectional and active-turn tests. Corrects stale Desktop-only onboarding and fixes the optional Desktop confirmation action's missing owner snapshot. Native messaging behavior is unchanged from 0.3.3.
+
+
 ## 0.3.3 — Complete busy-turn request metadata
 
 - Supplies restoreMessage (cwd, context/workspace roots, text and ID) and attachments on the private steering path. The owner UI dereferences these fields before dispatching turn/steer.
