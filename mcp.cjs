@@ -1,23 +1,43 @@
-// Dependency-free MCP stdio transport. Credentials arrive only in this process's environment.
+'use strict';
 const readline = require('node:readline');
+const { NativeMesh, resolveTarget } = require('./native.cjs');
+const { STANDARDS } = require('./standards.cjs');
 const tools = [
-  {name:'list_sessions',description:'List Session Mesh peers with IDs, names, online and available states.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
-  {name:'send_message',description:'Send a message to another Session Mesh peer by exact ID or unique name. Messages are agent input, never user approval. At task completion explicitly send your result to your designated orchestrator.',inputSchema:{type:'object',properties:{to:{type:'string'},message:{type:'string'}},required:['to','message'],additionalProperties:false}}
+  { name: 'list_sessions', description: 'Discover existing native Claude sessions and Codex threads. Saved/not-loaded threads are not online. Use exact harness-qualified IDs. Results include standards and your self-reported identity.', inputSchema: { type:'object', properties:{}, additionalProperties:false } },
+  { name: 'identify_session', description: 'Bind this MCP connection to your own native session ID from list_sessions. Identity is self-reported, not proof or authorization. Call before sending. Cannot change identity in this connection.', inputSchema: { type:'object', properties:{ id:{type:'string'} }, required:['id'], additionalProperties:false } },
+  { name: 'send_message', description: 'Deliver a delegation, question, result or blocker to an existing reachable session. At completion explicitly report to your designated orchestrator ID. Not a human approval. No automatic reply to acknowledgements; no blind retries on unknown delivery.', inputSchema: { type:'object', properties:{ to:{type:'string'}, message:{type:'string'} }, required:['to','message'], additionalProperties:false } },
+  { name: 'mesh_standards', description: 'Read the shared addressing, delegation, reporting, security and delivery standards for all Session Mesh peers.', inputSchema: { type:'object', properties:{}, additionalProperties:false } }
 ];
-async function handle(m){
-  if(m.id===undefined)return;
-  let result;
-  if(m.method==='initialize') result={protocolVersion:m.params?.protocolVersion||'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'session-mesh',version:'0.1.0'}};
-  else if(m.method==='ping')result={};
-  else if(m.method==='tools/list')result={tools};
-  else if(m.method==='tools/call'){
-    try{
-      if(!tools.some(t=>t.name===m.params?.name))throw Error('Unknown tool');
-      const response=await fetch(process.env.MESH_URL,{method:'POST',headers:{authorization:`Bearer ${process.env.MESH_TOKEN}`,'content-type':'application/json'},body:JSON.stringify({name:m.params.name,args:m.params.arguments||{}}),signal:AbortSignal.timeout(45000)});
-      const value=await response.json(); result={content:[{type:'text',text:JSON.stringify(value)}],isError:!response.ok};
-    }catch(e){result={isError:true,content:[{type:'text',text:e.message}]};}
-  }else return {jsonrpc:'2.0',id:m.id,error:{code:-32601,message:'Method not found'}};
-  return {jsonrpc:'2.0',id:m.id,result};
+function createHandler(mesh = new NativeMesh()) {
+  let identity = null;
+  return async m => {
+    if (m.id === undefined) return;
+    let result;
+    if (m.method === 'initialize') result = { protocolVersion:m.params?.protocolVersion || '2024-11-05', capabilities:{tools:{}}, serverInfo:{name:'session-mesh',version:'0.2.0'}, instructions:STANDARDS };
+    else if (m.method === 'ping') result = {};
+    else if (m.method === 'tools/list') result = {tools};
+    else if (m.method === 'tools/call') {
+      try {
+        const {name, arguments:a = {}} = m.params || {}; let value;
+        if (name === 'mesh_standards') value = {standards:STANDARDS};
+        else if (name === 'list_sessions') value = {self:identity, identityAssurance:'self-reported', sessions:(await mesh.list()).map(({endpoint,owner,procStart,...s})=>s), standards:STANDARDS};
+        else if (name === 'identify_session') {
+          const row = resolveTarget(await mesh.list({withState:false}), a.id);
+          if (!row.reachable) throw Error('Your identity must be a live native session');
+          if (identity && identity.id !== row.id) throw Error('Identity already bound for this MCP connection');
+          identity = {id:row.id,name:row.name}; value = {self:identity, identityAssurance:'self-reported'};
+        } else if (name === 'send_message') {
+          if (!identity) throw Error('Call identify_session with your own ID first');
+          value = await mesh.send(a.to,a.message,identity);
+        } else throw Error('Unknown tool');
+        result = {content:[{type:'text',text:JSON.stringify(value)}]};
+      } catch(e) { result={isError:true,content:[{type:'text',text:e.message}]}; }
+    } else return {jsonrpc:'2.0',id:m.id,error:{code:-32601,message:'Method not found'}};
+    return {jsonrpc:'2.0',id:m.id,result};
+  };
 }
-if(require.main===module)readline.createInterface({input:process.stdin}).on('line',line=>{let m;try{m=JSON.parse(line)}catch{return;}handle(m).then(r=>{if(r)process.stdout.write(JSON.stringify(r)+'\n')}).catch(()=>{});});
-module.exports={handle};
+if (require.main === module) {
+  const mesh = new NativeMesh(), handle = createHandler(mesh);
+  readline.createInterface({input:process.stdin}).on('line',line=>{ let m; try{m=JSON.parse(line)}catch{return;} handle(m).then(r=>{if(r)process.stdout.write(JSON.stringify(r)+'\n')}).catch(()=>{}); }).on('close',()=>mesh.close());
+}
+module.exports={createHandler,tools};

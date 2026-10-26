@@ -1,8 +1,11 @@
 **
 !package.json
 !extension.cjs
-!core.cjs
+!native.cjs
+!ipc.cjs
 !mcp.cjs
+!setup.cjs
+!standards.cjs
 !mesh.svg
 !README.md
 !LICENSE
@@ -11,3 +14,4 @@
 !SECURITY.md
 !CONTRIBUTING.md
 !RELEASING.md
+!TRANSPORTS.md

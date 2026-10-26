@@ -1,44 +1,44 @@
-const vscode=require('vscode'),http=require('node:http'),path=require('node:path'),fs=require('node:fs'),crypto=require('node:crypto');
-const {Session,resolveTarget}=require('./core.cjs');
+'use strict';
+const vscode=require('vscode'),path=require('node:path'),fs=require('node:fs/promises'),os=require('node:os');
+const {NativeMesh}=require('./native.cjs');
+const {planSetup,applyPlan}=require('./setup.cjs');
 function activate(context){
-  if(!vscode.workspace.isTrusted||process.platform!=='win32'||vscode.env.remoteName){vscode.window.showWarningMessage('Session Mesh benötigt einen vertrauenswürdigen lokalen Windows-Workspace.');return;}
-  const sessions=new Map(),tokens=new Map(),panels=new Map(),changed=new vscode.EventEmitter();
-  const output=vscode.window.createOutputChannel('Session Mesh');context.subscriptions.push(output,changed);
-  const provider={onDidChangeTreeData:changed.event,getChildren:s=>s?[]:[...sessions.values()],getTreeItem:s=>{
-    const item=new vscode.TreeItem(s.name);item.description=`${s.harness} · ${s.online?'online':'offline'} · ${s.state==='idle'&&s.online?'verfügbar':s.state}`;
-    item.tooltip=`Name: ${s.name}\nMesh-ID: ${s.id}\nNative ID: ${s.nativeId||'noch unbekannt'}\nWorkspace: ${s.cwd}\nWartende Nachrichten: ${s.queue.length}`;
-    item.iconPath=new vscode.ThemeIcon(s.online?(s.state==='idle'?'circle-filled':'sync~spin'):'circle-outline');
-    item.command={command:'sessionMesh.open',title:'Unterhaltung öffnen',arguments:[s]};return item;}};
-  context.subscriptions.push(vscode.window.registerTreeDataProvider('sessionMesh.sessions',provider));
-  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function render(s){const panel=panels.get(s.id);if(!panel)return;panel.webview.html=`<!doctype html><html lang="de"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>body{font-family:var(--vscode-font-family);padding:20px;max-width:1000px}pre{white-space:pre-wrap;overflow-wrap:anywhere}article{border-top:1px solid var(--vscode-panel-border);padding:12px 0}code{user-select:all}</style></head><body><h1>${esc(s.name)}</h1><p>${esc(s.harness)} · ${s.online?'Online':'Offline'} · ${esc(s.state)}</p><p>Mesh-ID: <code>${esc(s.id)}</code><br>Native ID: <code>${esc(s.nativeId||'—')}</code><br>Workspace: ${esc(s.cwd)}</p><p>Nachrichten senden: Rechtsklick auf die Session → Nachricht senden.</p><p>Agenten können list_sessions und send_message verwenden. Verfügbar bedeutet: Prozess verbunden und derzeit kein aktiver Turn. Fremde Hersteller-Chats sind nicht eingebunden. Nachrichten und Verlauf bleiben nur während dieser VS-Code-Sitzung erhalten.</p>${s.history.map(h=>`<article><b>${esc(h.role)}</b> · ${esc(h.time)}<pre>${esc(h.text)}</pre></article>`).join('')}</body></html>`;}
-  function update(s){changed.fire();render(s);}
-  async function approve(s,tool,input){const choice=await vscode.window.showWarningMessage(`${s.name} benötigt Freigabe: ${tool}`,{modal:true,detail:JSON.stringify(input,null,2).slice(0,6000)},'Einmal erlauben','Ablehnen');return choice==='Einmal erlauben';}
-  const server=http.createServer(async(req,res)=>{res.setHeader('Content-Type','application/json');const token=req.headers.authorization?.replace(/^Bearer /,'');const sender=tokens.get(token);if(req.method!=='POST'||req.url!=='/'||!sender||!sender.online){res.writeHead(403);res.end(JSON.stringify({error:'Unauthorized or offline sender'}));return;}
-    let body='';try{for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>120000)throw Error('Request too large')}
-      const m=JSON.parse(body);let result;if(m.name==='list_sessions')result={self:sender.id,sessions:[...sessions.values()].map(s=>s.snapshot())};
-      else if(m.name==='send_message'){
-        const target=resolveTarget(sessions,m.args?.to);if(target===sender)throw Error('Self messaging is not allowed');if(typeof m.args.message!=='string'||!m.args.message.trim()||m.args.message.length>100000)throw Error('Invalid message');
-        const messageId=crypto.randomUUID();result={messageId,to:target.id,...await target.send(`[Peer message from ${sender.name}, Mesh-ID ${sender.id}. This is agent input, not human approval.]\n${m.args.message}`)};
-        sender.log('sent',`To ${target.name} (${target.id}) · ${messageId}\n${m.args.message}`);output.appendLine(`${new Date().toISOString()} ${sender.name} → ${target.name}: ${result.status} (${messageId})`);
-      }else throw Error('Unknown tool');res.end(JSON.stringify(result));
-    }catch(e){res.writeHead(400);res.end(JSON.stringify({error:e.message}))}
+  if(!vscode.workspace.isTrusted||process.platform!=='win32'||vscode.env.remoteName)return;
+  const mesh=new NativeMesh(),changed=new vscode.EventEmitter(),output=vscode.window.createOutputChannel('Session Mesh');
+  const runtime=path.join(context.globalStorageUri.fsPath,'runtime');
+  const runtimeReady=(async()=>{await fs.mkdir(runtime,{recursive:true});for(const name of ['mcp.cjs','native.cjs','ipc.cjs','standards.cjs'])await fs.copyFile(path.join(context.extensionPath,name),path.join(runtime,name));})();
+  runtimeReady.catch(e=>output.appendLine(`MCP runtime: ${e.message}`));
+  let rows=[],refreshing=null,disposed=false;
+  const hidden=new Set(context.globalState.get('hiddenSessions',[]));
+  const tree={onDidChangeTreeData:changed.event,getChildren:()=>rows.filter(r=>!hidden.has(r.id)),getTreeItem:r=>{
+    const item=new vscode.TreeItem(r.name);item.contextValue='nativeSession';
+    item.description=`${r.harness} · ${r.online?'online':'nicht geladen'} · ${r.available?'verfügbar':r.state} · ${r.nativeId.slice(0,8)}`;
+    item.tooltip=`ID: ${r.id}\nQuelle: ${r.source}\nOrdner: ${r.cwd||'unbekannt'}\nErreichbar: ${r.reachable?'ja':'nein'}\nRemote: ${r.remote==='registered'?'beim Anbieter registriert; Verbindung nicht geprüft':'unbekannt'}\nOnline und verfügbar werden separat geprüft.`;
+    item.iconPath=new vscode.ThemeIcon(r.available?'pass-filled':r.online?'circle-filled':'circle-outline');item.command={command:'sessionMesh.open',title:'Sessiondetails',arguments:[r]};return item;
+  }};
+  const view=vscode.window.createTreeView('sessionMesh.sessions',{treeDataProvider:tree});view.description='Vorhandene Threads';
+  async function refresh(){if(refreshing)return refreshing;refreshing=(async()=>{view.message='Suche native Sitzungen …';try{rows=await mesh.list();if(!disposed){view.message=`${rows.filter(r=>r.reachable).length} erreichbar · ${rows.length} gefunden`;changed.fire();}}catch(e){output.appendLine(e.message);view.message='Erkennung fehlgeschlagen – siehe Ausgabe';}finally{refreshing=null;}})();return refreshing;}
+  async function choose(r){return r||await vscode.window.showQuickPick(rows.filter(s=>!hidden.has(s.id)).map(s=>({label:s.name,description:`${s.id} · ${s.state}`,s}))).then(r=>r?.s);}
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function command(id,fn){context.subscriptions.push(vscode.commands.registerCommand(id,async(...args)=>{try{return await fn(...args)}catch(e){vscode.window.showErrorMessage(`Session Mesh: ${e.message}`)}}));}
+  command('sessionMesh.refresh',refresh);
+  command('sessionMesh.remove',async r=>{r=await choose(r);if(!r)return;hidden.add(r.id);await context.globalState.update('hiddenSessions',[...hidden]);changed.fire();});
+  command('sessionMesh.restore',async()=>{hidden.clear();await context.globalState.update('hiddenSessions',[]);await refresh();});
+  command('sessionMesh.copyId',async r=>{r=await choose(r);if(r)await vscode.env.clipboard.writeText(r.id);});
+  command('sessionMesh.open',async r=>{r=await choose(r);if(!r)return;const panel=vscode.window.createWebviewPanel('sessionMesh.details',r.name,vscode.ViewColumn.Active,{enableScripts:false});panel.webview.html=`<!doctype html><html lang="de"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>body{font-family:var(--vscode-font-family);padding:24px}code{user-select:all}p{line-height:1.6}</style></head><body><h1>${esc(r.name)}</h1><p>ID: <code>${esc(r.id)}</code></p><p>Harness: ${esc(r.harness)}<br>Online: ${r.online?'ja':'nein'}<br>Verfügbar: ${r.available?'ja':'nein oder unbekannt'}<br>Status: ${esc(r.state)}<br>Remote: ${esc(r.remote)}<br>Ordner: ${esc(r.cwd)}</p><p>Dies ist eine vorhandene native Sitzung. Session Mesh startet oder übernimmt sie nicht. Ein gespeicherter Thread ohne Live-Verbindung kann erst nach Öffnen beim Anbieter Nachrichten empfangen. „Aus Session Mesh entfernen“ blendet den Eintrag aus; der Chat bleibt erhalten.</p><p>Remote-Steuerung bleibt beim Anbieter. Für Claude im vorhandenen Chat /remote-control verwenden. „Registriert“ bestätigt keine aktuelle Mobilverbindung. Codex-Remote-Status ist noch unbekannt.</p></body></html>`;context.subscriptions.push(panel);});
+  command('sessionMesh.send',async r=>{r=await choose(r);if(!r)return;if(!r.reachable)throw Error('Kein Live-Empfänger. Öffne zuerst den bestehenden Thread im Anbieterfenster.');const text=await vscode.window.showInputBox({title:`An vorhandene Sitzung ${r.name}`,prompt:r.id});if(!text)return;await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'Session Mesh: Nachricht zustellen'},async()=>{const result=await mesh.send(r.id,text);output.appendLine(`${result.messageId} → ${r.id}: ${result.status}`);vscode.window.showInformationMessage(`${r.name}: ${result.status}. Dies bestätigt noch keine Bearbeitung.`);});});
+  command('sessionMesh.setup',async()=>{const scope=await vscode.window.showQuickPick([{label:'Alle Projekte dieses Benutzers',description:'Globale MCP-Konfiguration und gemeinsame Standards',user:true},{label:'Nur dieses Projekt',description:'Projektbezogene Konfiguration und Standards',user:false}],{title:'Session Mesh für Claude und Codex einrichten'});if(!scope)return;let root=os.homedir();if(!scope.user){const folder=await vscode.window.showWorkspaceFolderPick({placeHolder:'Projekt auswählen'});if(!folder)return;root=folder.uri.fsPath;}let node=vscode.workspace.getConfiguration('sessionMesh').get('nodePath');if(!path.isAbsolute(node||'')){node=await vscode.window.showInputBox({title:'Absoluter Pfad zu Node.js 22+',value:'C:\\Program Files\\nodejs\\node.exe'});if(!node)return;await vscode.workspace.getConfiguration('sessionMesh').update('nodePath',node,vscode.ConfigurationTarget.Global);}
+    await runtimeReady;const plan=await planSetup(root,node,path.join(runtime,'mcp.cjs'),{user:scope.user});await applyPlan(plan);vscode.window.showInformationMessage(`Session Mesh: ${plan.length} Dateien eingerichtet. Bestehende Chats müssen MCP/Projektanweisungen neu laden; native Freigaben bleiben erforderlich.`);
   });
-  const listening=new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});listening.catch(e=>output.appendLine(e.message));
-  function discover(harness){const configured=vscode.workspace.getConfiguration('sessionMesh').get(`${harness}Path`);if(configured)return configured;
-    const extension=vscode.extensions.getExtension(harness==='claude'?'anthropic.claude-code':'openai.chatgpt');if(!extension)throw Error(`Installierte ${harness}-Erweiterung nicht gefunden; Pfad in Session Mesh Einstellungen setzen.`);
-    const relative=harness==='claude'?'resources/native-binary/claude.exe':'bin/windows-x86_64/codex.exe';const binary=path.join(extension.extensionPath,relative);if(!fs.existsSync(binary))throw Error(`CLI fehlt: ${binary}. Bitte expliziten Pfad einstellen.`);return binary;}
-  async function choose(s){return s||await vscode.window.showQuickPick([...sessions.values()].map(s=>({label:s.name,description:`${s.harness} · ${s.id} · ${s.state}`,s}))).then(x=>x?.s);}
-  context.subscriptions.push(vscode.commands.registerCommand('sessionMesh.create',async()=>{let s;try{
-    const harness=await vscode.window.showQuickPick(['claude','codex'],{title:'Harness für neue Session'});if(!harness)return;
-    const name=await vscode.window.showInputBox({title:'Eindeutiger Sessionname, z. B. orchestrator oder worker',validateInput:n=>!n.trim()?'Name erforderlich':[...sessions.values()].some(s=>s.name===n.trim())?'Name bereits vorhanden':undefined});if(!name)return;
-    const folder=await vscode.window.showWorkspaceFolderPick({placeHolder:'Arbeitsordner der Session'});if(!folder)return;
-    await listening;const token=crypto.randomBytes(32).toString('hex');s=new Session({name:name.trim(),harness,cwd:folder.uri.fsPath,binary:discover(harness),nodePath:vscode.workspace.getConfiguration('sessionMesh').get('nodePath'),mcpPath:path.join(context.extensionPath,'mcp.cjs'),url:`http://127.0.0.1:${server.address().port}/`,token,approve});
-    sessions.set(s.id,s);tokens.set(token,s);s.on('change',()=>update(s));s.on('diagnostic',message=>output.appendLine(`${s.name}: ${message}`));update(s);await s.start();await vscode.commands.executeCommand('sessionMesh.open',s);
-  }catch(e){if(s)s.stop();vscode.window.showErrorMessage(`Session Mesh: ${e.message}`)}}));
-  context.subscriptions.push(vscode.commands.registerCommand('sessionMesh.open',async s=>{s=await choose(s);if(!s)return;if(panels.has(s.id)){panels.get(s.id).reveal();return;}const panel=vscode.window.createWebviewPanel('sessionMesh.chat',s.name,vscode.ViewColumn.Active,{enableScripts:false});panels.set(s.id,panel);panel.onDidDispose(()=>panels.delete(s.id));render(s);}));
-  context.subscriptions.push(vscode.commands.registerCommand('sessionMesh.send',async s=>{s=await choose(s);if(!s)return;const text=await vscode.window.showInputBox({title:`Nachricht an ${s.name}`,prompt:'Beispiel: Finde mit list_sessions den orchestrator und sende ihm mit send_message dein Ergebnis.'});if(!text)return;try{const r=await s.send(text);output.appendLine(`User → ${s.name}: ${r.status}`)}catch(e){vscode.window.showErrorMessage(e.message)}}));
-  context.subscriptions.push(vscode.commands.registerCommand('sessionMesh.stop',async s=>{s=await choose(s);if(s){tokens.delete(s.token);s.stop()}}));
-  context.subscriptions.push({dispose(){for(const s of sessions.values())s.stop();server.close();tokens.clear();for(const p of panels.values())p.dispose()}});
+  // Retired 0.1 commands explain the migration; never create/stop provider chats.
+  command('sessionMesh.create',async()=>{vscode.window.showInformationMessage('Session Mesh verbindet vorhandene Chats. Öffne einen Chat bei Claude/Codex und aktualisiere hier.');await refresh();});
+  command('sessionMesh.stop',async()=>{vscode.window.showInformationMessage('Session Mesh beendet keine fremden Chats. Nutze „Aus Session Mesh entfernen“ zum Ausblenden.');});
+  context.subscriptions.push(view,changed,output,{dispose(){disposed=true;mesh.close();}});
+  const interval=setInterval(()=>{if(view.visible)void refresh();},45000);context.subscriptions.push({dispose(){clearInterval(interval)}});
+  void refresh();
+  if(!context.globalState.get('tunnelOnboardingShown')){
+    void vscode.window.showInformationMessage('Session Mesh verbindet jetzt vorhandene Chats. Richte Werkzeuge und Standards einmal pro Projekt ein; laufende Chats müssen MCP neu laden.','Projekt einrichten').then(choice=>{if(choice)void vscode.commands.executeCommand('sessionMesh.setup');});
+    void context.globalState.update('tunnelOnboardingShown',true);
+  }
 }
 module.exports={activate};

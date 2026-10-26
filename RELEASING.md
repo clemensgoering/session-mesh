@@ -2,14 +2,14 @@
 
 ## Current status
 
-The source repository is https://github.com/clemensgoering/session-mesh . Version 0.1.0 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
+The source repository is https://github.com/clemensgoering/session-mesh . Version 0.2.0 is an experimental preview. No Marketplace listing or publisher account has been created by these scripts.
 
 ## Before a public listing
 
 1. Set the real Marketplace `publisher` in package.json. `local-lab` is deliberately only a local placeholder; changing publisher changes extension identity.
 2. Set real HTTPS `repository.url`, `homepage`, and `bugs.url`. Enable private vulnerability reporting and add the actual security contact to SECURITY.md. Confirm project name availability and rights to distributed assets. The MIT license covers this project's source, not third-party binaries.
-3. Run a native end-to-end test in both directions with idle and busy recipients, explicit result reporting to an orchestrator, tool approvals, process exit and restart. Test on a clean Windows x64 installation with Node 22+ and separately installed, signed-in harnesses. Record CLI versions, expected/observed results and reviewer/date; never record credentials.
-4. Inspect UI at normal and high zoom, light/dark themes and keyboard navigation. Verify restricted and virtual workspaces cannot launch harnesses. Verify no model starts merely by opening the view.
+3. Run a native existing-session end-to-end test in both directions with idle and busy recipients, explicit result reporting to an orchestrator, tool approvals, process exit and restart. Test on a clean Windows x64 installation with Node 22+ and separately installed, signed-in harnesses. Record CLI versions, expected/observed results and reviewer/date; never record credentials.
+4. Inspect UI at normal and high zoom, light/dark themes and keyboard navigation. Verify restricted and virtual workspaces cannot launch harnesses. Verify no provider process starts or thread is resumed by discovery. Verify native owners, busy/idle races, hide/restore, setup idempotence and remote-mobile delegation.
 5. Update CHANGELOG.md, version and README support status. Set `.release-evidence.json` locally to `{"bidirectionalLiveTest":true,"reviewedBy":"...","reviewedAt":"YYYY-MM-DD"}` only after genuinely completing validation. This file is ignored and never packaged.
 6. Run `npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm audit`, `npm run release:check`, and `npm run package`. Review `npx vsce ls --no-dependencies` and the final VSIX contents. Test installation of that exact artifact.
 7. Upload the reviewed VSIX manually to a GitHub Release or Marketplace as a preview after owner approval. Authenticate through the publisher's supported Marketplace flow. Do not commit tokens or place publishing credentials in pull-request workflows.

@@ -1,38 +1,50 @@
-# Session Mesh — unabhängiges VS-Code-Experiment
+# Session Mesh
 
-**Experimental preview · Windows x64 · VS Code Desktop.** Noch keine stabile Marketplace-Version. Claude → Codex wurde live bestätigt; der Rückweg ist noch nicht abgenommen. Nicht mit OpenAI, Anthropic oder Microsoft verbunden oder von ihnen unterstützt.
+**Experimental preview · Windows x64 · VS Code Desktop.** A local tunnel between your **existing** Claude Code sessions and Codex threads. It does not create replacement chats, run a separate agent or manage an orchestration queue. Not affiliated with Anthropic, OpenAI or Microsoft.
 
-## Installation aus einer VSIX
+## What it does
 
-In VS Code: Extensions → Menü (…) → Install from VSIX → `session-mesh-win32-x64-0.1.0.vsix` auswählen. Alternativ `code --install-extension <Pfad-zur-VSIX>`. Einen vertrauenswürdigen lokalen Ordner öffnen. Remote/WSL, virtuelle Workspaces und andere Betriebssysteme werden in dieser Version nicht unterstützt. Node.js 22+ muss installiert und im PATH sein; alternativ `sessionMesh.nodePath` setzen. Mindestens der gewünschte Harness muss separat installiert und angemeldet sein. Ohne Herstellererweiterung den absoluten CLI-Pfad in `sessionMesh.claudePath` bzw. `sessionMesh.codexPath` setzen. Für beide Harnesse werden eigene Konten und verfügbare Nutzungskontingente benötigt.
+- Discovers live Claude sessions from their native registry and recently indexed Codex threads from the native index.
+- Probes the existing inbox/owning application instead of treating files on disk as online sessions.
+- Shows name, native ID, harness, online status, observed idle/busy state and known remote registration.
+- Delivers messages to the exact native session through its existing transport; busy Codex turns use steering.
+- Gives both harnesses the same MCP tools and communication standards. An agent explicitly sends results to its designated orchestrator; no completion hook is required.
+- Lets you hide entries without deleting, archiving or stopping the original chat.
 
-## Projekt und Veröffentlichung
+## Install and use
 
-[Datenschutz](PRIVACY.md), [Lizenz](LICENSE), [Änderungen](CHANGELOG.md), [Beiträge](CONTRIBUTING.md), [Sicherheit](SECURITY.md) und [Release-Ablauf](RELEASING.md). Der Runtime-Code hat keine npm-Abhängigkeiten. Anbieter-Binaries und Zugangsdaten sind nicht im Paket enthalten. Der lokale Publisher `local-lab` muss vor einer öffentlichen Marketplace-Veröffentlichung durch die tatsächliche Publisher-ID ersetzt werden.
+Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
 
-Eigenständige Erweiterung ohne Abhängigkeit von harnes-sync. Benötigt Windows, VS Code, Node.js 22+ und die angemeldeten Claude-/Codex-CLIs. Die installierten Herstellererweiterungen dienen nur zur Binary-Erkennung. Keine Herstellerdateien oder globalen Einstellungen werden verändert.
+1. Install `session-mesh-win32-x64-0.2.0.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
+2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
+3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
+4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.
+5. Right-click an entry to copy its full ID, send a message or choose **Aus Session Mesh entfernen**. **Ausgeblendete Sessions wieder anzeigen** restores hidden entries. Removing an entry never deletes its provider history.
 
-## Ausprobieren
+Example instruction for a worker:
 
-Nach Installation der VSIX das Session-Mesh-Symbol in der Activity Bar öffnen. Über + eine Claude- und eine Codex-Session im gewünschten Workspace anlegen. Namen beispielsweise `orchestrator` und `worker`. Rechtsklick → Nachricht senden. Anklicken öffnet den Verlauf mit Mesh-ID, nativer ID, Verbindungs- und Arbeitszustand. IDs stehen zusätzlich im Tooltip.
+> Use Session Mesh list_sessions. Identify yourself with identify_session using your own native ID. Work on the assigned task and explicitly send your final result or blocker with send_message to `claude:<orchestrator-native-id>`. Do not respond to simple acknowledgements.
 
-Dem Orchestrator sagen: „Warte auf Ergebnisse. Antworte nur, wenn eine Entscheidung oder neue Aufgabe nötig ist.“ Dem Worker sagen: „Benutze list_sessions, löse [Aufgabe] und sende dein Ergebnis mit send_message an orchestrator.“ Kein Abschluss-Hook erforderlich. Ein Peer-Aufruf ist keine menschliche Freigabe. Angeforderte Datei-/Shellfreigaben erscheinen in VS Code und werden nicht automatisch erteilt.
+If the agent cannot establish its own native ID, tell it the ID shown in Session Mesh. Identity is self-reported, not an authenticated permission boundary. Multiple sessions can share a title; use `claude:<uuid>` or `codex:<uuid>` for reliable routing.
 
-Online heißt: Der verwaltete Prozess ist verbunden. Verfügbar heißt: online und kein aktiver Turn. Das ist keine Garantie für ausreichendes Nutzungskontingent oder erfolgreiche Authentifizierung beim nächsten Modellaufruf. Fremde, bereits offene Hersteller-Chats werden in Version 0.1 nicht übernommen. Diese Erweiterung startet echte eigene Harness-Sitzungen und zeigt deren Verlauf selbst an.
+## Online, available and remote
 
-## Architektur und Grenzen
+**Online/reachable** means a native pipe/owner was observed. **Available** means that reachable session was positively observed idle. Unknown state is never presented as available. Discovery is a point-in-time observation and can race with closure or a new turn. Claude state comes from its live registry, which may lag runtime changes. Codex state comes from a temporary read-only stream subscription to the owning UI. An unowned saved thread must first be opened in its provider UI; Session Mesh will not resume it in a second process.
 
-- `core.cjs`: Adapter für Codex JSON-RPC app-server und Claude stream-json. Gemeinsamer Vertrag: start, send, snapshot, stop; change-Ereignis.
-- `mcp.cjs`: identische Werkzeuge list_sessions und send_message in beiden Harnessen.
-- `extension.cjs`: Sitzungsregister, authentifizierter Loopback-Router, Freigaben und VS-Code-Ansichten. Tokens gelten nur für die jeweilige Absendersitzung und werden nicht angezeigt.
-- Nachrichten, Warteschlange und Verläufe sind in dieser Experimentversion im Arbeitsspeicher. VS-Code-Neuladen beendet verwaltete Prozesse und verliert diese Daten. Keine garantierte Zustellung über Neustarts und keine automatische Wiederholung nach unklarem Versand.
-- Codex erhält Nachrichten während eines Turns zunächst in eine lokale Queue. Claude erhält sie über seinen persistenten Inputstream. Transportannahme wird ausdrücklich von Bearbeitung unterschieden.
-- Kein Polling-Modell, keine versteckten Abschlussmeldungen. Agenten senden selbst. Endlosschleifen sind durch klare Aufträge zu vermeiden; Self-Messaging wird abgewiesen. Ein globales Budget und Ratenbegrenzung sind noch nicht implementiert.
-- Lokaler IPC-Endpunkt erlaubt nur angemeldete Session-Tokens, andere lokale Prozesse mit Zugriff auf denselben Benutzer sind keine eigene Sicherheitsgrenze.
-- Nicht unterstützte Harness-Requests werden explizit abgelehnt. Freigabe-UI deckt einfache Shell-/Dateianfragen ab; weitere interaktive Protokolltypen brauchen eigene Adapterunterstützung.
+Claude remote `registered` means its registry contains a provider bridge session ID, not that a mobile device is currently connected. Codex remote status is currently unknown. Use the provider's own Remote Control setup in the original session. Session Mesh does not activate remote access, alter remote policies, expose a network listener or implement a phone UI. With a remotely reachable orchestrator and running host, its loaded MCP tools can delegate through the local tunnel.
 
-## Entwicklung
+Delivery results are **submitted** for a Claude inbox write and **accepted** for an owning Codex UI response. Neither confirms the model read the message or completed the work. Claude inbound rules can hold/refuse messages. Request an explicit reply when needed; never blindly retry an ambiguous timeout. No automatic queue, transcript forwarding, replay or persistence is implemented.
 
-`npm test` prüft Adressierung, Warteschlange, Status und MCP-Vertrag. `npm run package` baut die VSIX. Ohne Installation: `code --new-window --extensionDevelopmentPath=D:\Development\session-mesh <Arbeitsordner>`.
+## Setup files
 
-Referenzen: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Claude CLI](https://code.claude.com/docs/en/cli-reference). Native Endläufe mit beiden angemeldeten Harnessen sind zusätzlich zu den Protokolltests erforderlich.
+User-wide setup changes `~/.claude.json` (only the named MCP entry), `~/.codex/config.toml` (managed MCP block), `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` (marked instruction blocks). Project setup instead changes `.mcp.json`, `.codex/config.toml`, `CLAUDE.md` and `AGENTS.md` in the chosen folder. Backups use `.session-mesh-<timestamp>.bak`; keep backups private because the original configs may contain secrets. Setup is user-invoked and never silently changes every project on activation. More specific project settings or provider policy can override user-wide configuration.
+
+The MCP runtime is copied into VS Code's extension global storage so its path survives extension version upgrades. To uninstall the integration, remove the `session-mesh` MCP entry/marked blocks from the above files, reload MCP in the providers, then uninstall the extension. Uninstalling the VSIX alone does not remove those user-configured files or provider history. Delete the global-storage runtime only after removing its MCP references.
+
+## Development and verification
+
+`npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm run package`. The packaged runtime has no npm dependencies. GitHub CI packages the VSIX but never publishes it. F5 uses the Extension Development Host.
+
+Native read-only discovery has identified a live Claude VS Code session and an active Codex owner without starting/resuming chats. End-to-end delivery in both directions into existing provider windows, busy/idle races, inbound hold/refuse and remote-mobile delegation remain release gates. Private transport compatibility is experimental and can change on provider updates; see [transport notes](TRANSPORTS.md).
+
+[Privacy](PRIVACY.md) · [Security](SECURITY.md) · [MIT License](LICENSE) · [Changes](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Release procedure](RELEASING.md).

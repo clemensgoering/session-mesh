@@ -1,8 +1,8 @@
 {
   "name": "session-mesh",
   "displayName": "Session Mesh",
-  "description": "Direkte Kommunikation zwischen Claude- und Codex-Sitzungen",
-  "version": "0.1.0",
+  "description": "Tunnel zwischen vorhandenen Claude- und Codex-Sitzungen mit nativer Erkennung und gemeinsamen Nachrichtenwerkzeugen",
+  "version": "0.2.0",
   "publisher": "local-lab",
   "engines": {
     "vscode": "^1.94.0"
@@ -12,7 +12,7 @@
     "onView:sessionMesh.sessions"
   ],
   "scripts": {
-    "check": "node --check core.cjs && node --check extension.cjs && node --check mcp.cjs && node --check test.cjs",
+    "check": "node --check extension.cjs && node --check native.cjs && node --check ipc.cjs && node --check mcp.cjs && node --check setup.cjs && node --check standards.cjs && node --check test.cjs",
     "test": "node --test test.cjs",
     "package": "vsce package --target win32-x64 --no-dependencies",
     "release:check": "node scripts/release-check.cjs",
@@ -38,27 +38,47 @@
     },
     "commands": [
       {
-        "command": "sessionMesh.create",
-        "title": "Session Mesh: Neue Session",
-        "icon": "$(add)"
+        "command": "sessionMesh.refresh",
+        "title": "Session Mesh: Vorhandene Sessions aktualisieren",
+        "icon": "$(refresh)"
       },
       {
-        "command": "sessionMesh.send",
-        "title": "Session Mesh: Nachricht senden"
+        "command": "sessionMesh.setup",
+        "title": "Session Mesh: Werkzeuge und Standards einrichten",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "sessionMesh.remove",
+        "title": "Session Mesh: Aus Session Mesh entfernen",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sessionMesh.restore",
+        "title": "Session Mesh: Ausgeblendete Sessions wieder anzeigen"
+      },
+      {
+        "command": "sessionMesh.copyId",
+        "title": "Session Mesh: Session-ID kopieren",
+        "icon": "$(copy)"
       },
       {
         "command": "sessionMesh.open",
-        "title": "Session Mesh: Unterhaltung öffnen"
+        "title": "Session Mesh: Sessiondetails ?ffnen"
       },
       {
-        "command": "sessionMesh.stop",
-        "title": "Session Mesh: Session stoppen"
+        "command": "sessionMesh.send",
+        "title": "Session Mesh: Nachricht an vorhandene Session senden"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "sessionMesh.create",
+          "command": "sessionMesh.setup",
+          "when": "view == sessionMesh.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "sessionMesh.refresh",
           "when": "view == sessionMesh.sessions",
           "group": "navigation"
         }
@@ -66,37 +86,27 @@
       "view/item/context": [
         {
           "command": "sessionMesh.send",
-          "when": "view == sessionMesh.sessions"
+          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
         },
         {
-          "command": "sessionMesh.stop",
-          "when": "view == sessionMesh.sessions"
+          "command": "sessionMesh.copyId",
+          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
+        },
+        {
+          "command": "sessionMesh.remove",
+          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
         }
       ]
     },
     "configuration": {
       "title": "Session Mesh",
       "properties": {
-        "sessionMesh.codexPath": {
-          "type": "string",
-          "default": "",
-          "description": "Codex executable; empty discovers the installed extension.",
-          "scope": "machine",
-          "restricted": true
-        },
-        "sessionMesh.claudePath": {
-          "type": "string",
-          "default": "",
-          "description": "Claude executable; empty discovers the installed extension.",
-          "scope": "machine",
-          "restricted": true
-        },
         "sessionMesh.nodePath": {
           "type": "string",
-          "default": "node",
-          "description": "Node.js executable for the messaging tool server.",
+          "default": "C:\\Program Files\\nodejs\\node.exe",
           "scope": "machine",
-          "restricted": true
+          "restricted": true,
+          "description": "Absolute path to Node.js 22+ for shared MCP setup."
         }
       }
     }
