@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 ? Desktop-/phone-oriented tunnel
+
+- Defaults Codex delivery to user-confirmed Desktop owners; permits explicit any-owner local mode.
+- Shows exact owner IDs, owner-evidence provenance, route readiness, role and separate historical phone checks.
+- Rechecks ownership before sending and aborts on an owner change. No ownership takeover.
+- Adds Desktop/mobile guide, explicit connection probes, phone-receipt confirmation and orchestrator marking.
+- Adds read-only diagnose_session MCP tool and metadata-only diagnostic view.
+- Shares persistent routing preferences between the version-stable MCP runtime and UI.
+- Preserves hide/restore, exact addressing, global/project setup, standards and native approvals.
+
+Validation: 19 passing automated tests, installed VSIX 0.3 verification, MCP 0.3 handshake and read-only live owner diagnosis. Existing-session message delivery and simultaneous mobile access require a live user test; no claim that native Codex exclusivity is fixed.
+
 ## 0.2.0 — Experimental existing-session tunnel
 
 - Replaces managed worker creation with discovery of existing Claude sessions and indexed Codex threads.

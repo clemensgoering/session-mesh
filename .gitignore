@@ -9,3 +9,6 @@ coverage/
 .release-evidence.json
 
 *.session-mesh-*.bak
+
+bridge-state.json
+bridge-state.json.*.tmp

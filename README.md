@@ -11,11 +11,25 @@
 - Gives both harnesses the same MCP tools and communication standards. An agent explicitly sends results to its designated orchestrator; no completion hook is required.
 - Lets you hide entries without deleting, archiving or stopping the original chat.
 
+## Desktop and phone workflow (0.3)
+
+VS Code may stay open as a tunnel. Do not keep the target Codex chat open there for this workflow. Default Codex routing is now **desktop tunnel mode** and refuses sends to unconfirmed owners. The MCP runtime can route without an open VS Code window. This changes routing safeguards, not Codex remote-control support.
+
+1. Let the current answer finish. Close that Codex chat in VS Code, then open the **same existing thread** in the Desktop app. If Desktop still says it is used in another session, do not confirm it yet. Closing a tab is not guaranteed to release native ownership. Session Mesh does not force it.
+2. Refresh Session Mesh. Inspect its actual native owner client ID. The owner application can remain unknown: originator and saved last-writer metadata are not proof. A native client-status event can identify VS Code; otherwise choose **Desktop-Besitzer best?tigen** only after you checked Desktop is independently usable and the conflicting VS Code chat is closed. This is an explicit user attestation, labelled as such.
+3. Choose **Verbindungstest senden**. This deliberately sends a small prompt to the existing session, asking for a unique MESH_PROBE reply without tools or file changes. Check the reply in Desktop and then on the phone in that same host/thread. Native approvals can still block it.
+4. Choose **Handy-Empfang best?tigen** only when that exact reply is visible on the phone. Confirmation records a historical user check and timestamp, not continuous remote health. A fresh successful transport submission (within 15 minutes) for the same owner is required.
+5. Use **Als Orchestrator markieren** to publish that session's coordinator role through list_sessions. Workers should still address its exact ID. No model is started by marking a role.
+
+Owner changes invalidate matching Desktop/mobile evidence. To intentionally permit VS Code-owned local workers, use **Codex-Routing w?hlen ? Alle lokalen Besitzer erlauben**; this may reproduce the native mobile conflict. The tunnel never transfers ownership or bypasses that conflict. Read-only **diagnose_session** and the extension's diagnostic view expose owner IDs, route blocks and separate remote evidence.
+
+Hidden entries, online, idle, routeReady, owner application evidence and remote check are distinct. A pipe write or owning UI response never becomes a model/mobile acknowledgement automatically. If mobile updates still fail, this remains an unresolved provider path; a separately tested remote Claude orchestrator is an alternative.
+
 ## Install and use
 
 Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
 
-1. Install `session-mesh-win32-x64-0.2.0.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
+1. Install `session-mesh-win32-x64-0.3.0.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
 2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
 3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
 4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.
@@ -38,6 +52,8 @@ Delivery results are **submitted** for a Claude inbox write and **accepted** for
 ## Setup files
 
 User-wide setup changes `~/.claude.json` (only the named MCP entry), `~/.codex/config.toml` (managed MCP block), `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` (marked instruction blocks). Project setup instead changes `.mcp.json`, `.codex/config.toml`, `CLAUDE.md` and `AGENTS.md` in the chosen folder. Backups use `.session-mesh-<timestamp>.bak`; keep backups private because the original configs may contain secrets. Setup is user-invoked and never silently changes every project on activation. More specific project settings or provider policy can override user-wide configuration.
+
+Desktop bindings, routing mode, designated orchestrator, last probe metadata and phone checks are stored in bridge-state.json next to the stable runtime. MCP clients and the UI share it. The last 50 UI transport attempts are in memory and clear on reload.
 
 The MCP runtime is copied into VS Code's extension global storage so its path survives extension version upgrades. To uninstall the integration, remove the `session-mesh` MCP entry/marked blocks from the above files, reload MCP in the providers, then uninstall the extension. Uninstalling the VSIX alone does not remove those user-configured files or provider history. Delete the global-storage runtime only after removing its MCP references.
 

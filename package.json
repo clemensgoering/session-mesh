@@ -2,7 +2,7 @@
   "name": "session-mesh",
   "displayName": "Session Mesh",
   "description": "Tunnel zwischen vorhandenen Claude- und Codex-Sitzungen mit nativer Erkennung und gemeinsamen Nachrichtenwerkzeugen",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "local-lab",
   "engines": {
     "vscode": "^1.94.0"
@@ -12,7 +12,7 @@
     "onView:sessionMesh.sessions"
   ],
   "scripts": {
-    "check": "node --check extension.cjs && node --check native.cjs && node --check ipc.cjs && node --check mcp.cjs && node --check setup.cjs && node --check standards.cjs && node --check test.cjs",
+    "check": "node --check extension.cjs && node --check native.cjs && node --check ipc.cjs && node --check mcp.cjs && node --check setup.cjs && node --check standards.cjs && node --check bridge-state.cjs && node --check test.cjs",
     "test": "node --test test.cjs",
     "package": "vsce package --target win32-x64 --no-dependencies",
     "release:check": "node scripts/release-check.cjs",
@@ -41,6 +41,36 @@
         "command": "sessionMesh.refresh",
         "title": "Session Mesh: Vorhandene Sessions aktualisieren",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "sessionMesh.desktopGuide",
+        "title": "Session Mesh: Desktop-/Handy-Ablauf anzeigen",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "sessionMesh.confirmDesktop",
+        "title": "Session Mesh: Desktop-Besitzer best?tigen"
+      },
+      {
+        "command": "sessionMesh.probe",
+        "title": "Session Mesh: Verbindungstest senden"
+      },
+      {
+        "command": "sessionMesh.confirmMobile",
+        "title": "Session Mesh: Handy-Empfang best?tigen"
+      },
+      {
+        "command": "sessionMesh.orchestrator",
+        "title": "Session Mesh: Als Orchestrator markieren",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "sessionMesh.routingMode",
+        "title": "Session Mesh: Codex-Routing w?hlen"
+      },
+      {
+        "command": "sessionMesh.diagnostics",
+        "title": "Session Mesh: Diagnose und Zustellversuche anzeigen"
       },
       {
         "command": "sessionMesh.setup",
@@ -73,7 +103,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "sessionMesh.setup",
+          "command": "sessionMesh.desktopGuide",
           "when": "view == sessionMesh.sessions",
           "group": "navigation"
         },
@@ -85,16 +115,44 @@
       ],
       "view/item/context": [
         {
+          "command": "sessionMesh.open",
+          "when": "view == sessionMesh.sessions",
+          "group": "1_connect@0"
+        },
+        {
           "command": "sessionMesh.send",
-          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
+          "when": "view == sessionMesh.sessions",
+          "group": "1_connect@1"
+        },
+        {
+          "command": "sessionMesh.probe",
+          "when": "view == sessionMesh.sessions",
+          "group": "1_connect@2"
+        },
+        {
+          "command": "sessionMesh.confirmDesktop",
+          "when": "view == sessionMesh.sessions && viewItem == codexSession",
+          "group": "1_connect@3"
+        },
+        {
+          "command": "sessionMesh.confirmMobile",
+          "when": "view == sessionMesh.sessions",
+          "group": "1_connect@4"
+        },
+        {
+          "command": "sessionMesh.orchestrator",
+          "when": "view == sessionMesh.sessions",
+          "group": "2_manage@5"
         },
         {
           "command": "sessionMesh.copyId",
-          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
+          "when": "view == sessionMesh.sessions",
+          "group": "2_manage@6"
         },
         {
           "command": "sessionMesh.remove",
-          "when": "view == sessionMesh.sessions && viewItem == nativeSession"
+          "when": "view == sessionMesh.sessions",
+          "group": "2_manage@7"
         }
       ]
     },

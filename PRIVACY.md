@@ -11,3 +11,5 @@ The extension persists hidden entry IDs and onboarding state in VS Code global s
 Messages are sent only by an explicit UI send action or an MCP send_message call. Output logs contain route IDs and transport outcomes, not message bodies. No TCP listener, cloud synchronization or automatic transcript forwarding is included. Native pipes remain subject to the providers' rules and OS access controls.
 
 Stopping/uninstalling the extension does not stop provider sessions, remove provider histories or revoke sign-ins. Previously configured MCP runtime files and managed instruction blocks remain until explicitly removed as described in the README.
+
+Version 0.3 additionally stores Desktop owner attestations, routing mode, orchestrator ID, last connection-probe marker/metadata and historical user phone checks in bridge-state.json next to the stable runtime. These are shared with same-user MCP processes, contain native IDs/timestamps and are not cryptographic identity or current device-health evidence. The last 50 UI attempt metadata records are memory-only. Connection probes send a small user-triggered model prompt; no probes run automatically.

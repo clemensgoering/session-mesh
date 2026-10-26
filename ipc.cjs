@@ -8,7 +8,7 @@ const { randomUUID } = require('node:crypto');
 class CodexIPC extends EventEmitter {
   constructor(endpoint = '\\\\.\\pipe\\codex-ipc') {
     super(); this.endpoint = endpoint; this.pending = new Map(); this.buffer = Buffer.alloc(0);
-    this.clientId = 'initializing-client'; this.ready = false;
+    this.clientId = 'initializing-client'; this.ready = false; this.clientTypes=new Map(); this.snapshots=new Map();
   }
   async connect() {
     if (this.ready) return;
@@ -24,7 +24,7 @@ class CodexIPC extends EventEmitter {
       this.socket.on('error', e => { clearTimeout(timeout); reject(e); });
       this.socket.on('data', data => this.receive(data));
       this.socket.on('close', () => {
-        this.ready = false; this.buffer = Buffer.alloc(0);
+        this.ready = false; this.buffer = Buffer.alloc(0); this.clientTypes.clear();
         for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(Error('Codex IPC disconnected; delivery may be unknown')); }
         this.pending.clear(); this.emit('disconnect');
       });
@@ -51,7 +51,10 @@ class CodexIPC extends EventEmitter {
         if (m.resultType === 'error') p.reject(Error(m.error || 'IPC request rejected')); else p.resolve(m);
       } else if (m.type === 'client-discovery-request') {
         this.write({ type: 'client-discovery-response', requestId: m.requestId, response: { canHandle: false } });
-      } else if (m.type === 'broadcast') this.emit('broadcast', m);
+      } else if (m.type === 'broadcast') {
+        if(m.method==='client-status-changed'&&m.params?.clientId){if(m.params.status==='disconnected')this.clientTypes.delete(m.params.clientId);else if(typeof m.params.clientType==='string')this.clientTypes.set(m.params.clientId,m.params.clientType);}
+        this.emit('broadcast', m);
+      }
     }
   }
   request(method, params, { version = 1, timeout = 1800, targetClientId } = {}) {
@@ -71,6 +74,10 @@ class CodexIPC extends EventEmitter {
     return this.request('thread-owner-discovery', { hostId: 'local', conversationId: id });
   }
   async snapshot(id, owner) {
+    const key=id+':'+owner;if(this.snapshots.has(key))return this.snapshots.get(key);
+    const result=this.readSnapshot(id,owner).finally(()=>this.snapshots.delete(key));this.snapshots.set(key,result);return result;
+  }
+  async readSnapshot(id, owner) {
     return new Promise((resolve) => {
       const done = value => { clearTimeout(timer); this.off('broadcast', onMessage); try { this.broadcast('thread-stream-following-changed', { hostId: 'local', conversationId: id, following: false }, 1, [owner]); } catch {} resolve(value); };
       const onMessage = m => { if (m.method === 'thread-stream-state-changed' && m.sourceClientId === owner && m.params?.conversationId === id && m.params.change?.type === 'snapshot') done(m.params.change.conversationState); };

@@ -21,3 +21,7 @@ The local receiver implementation and schema were examined in the installed bina
 ## Remote control
 
 Remote control remains owned by each provider. No external port or alternate remote authentication is introduced. Claude bridgeSessionId is only a registration observation. Codex remote status is unknown. No claim of verified phone delegation is made without a live mobile end-to-end test.
+
+## 0.3 owner and remote safeguards
+
+Client status broadcasts can identify a client type when observed. Existing owners are not enumerated by the router handshake, so app type can remain unknown. Never infer current application ownership from originator/source fields. Default Desktop routing requires observed Desktop type or explicit user attestation for the live ownerClientId; an observed vscode type takes precedence over an attestation. Owner identity is checked again before mutation. UI/MCP do not register ownership handlers or resume threads. The immutable owner ID changes on client recreation, invalidating old evidence. Remote success is separately user-confirmed against a recent probe and displayed with its timestamp. It is not an automated provider-health measurement.
