@@ -56,6 +56,19 @@ function ownerReceipt(response,method){
   if(typeof turnId!=='string'||!turnId)throw Error('Owner response has no turn ID; delivery unknown. Do not retry automatically.');
   return {turnId,resultMethod:response.method};
 }
+const claudeTitleFiles=new Map(),claudeTitleCache=new Map();
+function parseClaudeTitles(text,id){let custom,ai;for(const line of text.split('\n'))try{const r=JSON.parse(line);if(r.sessionId!==id)continue;const value=r.type==='custom-title'?r.customTitle:r.type==='ai-title'?r.aiTitle:null;if(typeof value!=='string'||!value.trim())continue;const title=value.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,256);if(r.type==='custom-title')custom=title;else ai=title;}catch{}return custom?{title:custom,titleSource:'claude-custom-title'}:ai?{title:ai,titleSource:'claude-ai-title'}:null;}
+async function readClaudeTitle(home,id,cwd){
+  if(!uuid.test(id))return null;const key=home+':'+id,root=path.join(home,'.claude','projects');
+  try{
+    let file=claudeTitleFiles.get(key);
+    if(!file){const preferred=String(cwd||'').replace(/[^a-zA-Z0-9]/g,'-');const dirs=[preferred,...await fs.readdir(root)];for(const dir of new Set(dirs)){if(!dir)continue;const candidate=path.join(root,dir,id+'.jsonl');try{if((await fs.lstat(candidate)).isFile()){file=candidate;break;}}catch{}}if(!file)return null;claudeTitleFiles.set(key,file);}
+    const stat=await fs.lstat(file);if(!stat.isFile())return null;
+    const stamp=stat.size+':'+stat.mtimeMs,cached=claudeTitleCache.get(key);if(cached?.stamp===stamp)return cached.value;
+    const handle=await fs.open(file,'r');let texts=[];try{const bytes=128*1024;for(const start of new Set([0,Math.max(0,stat.size-bytes)])){const buffer=Buffer.alloc(Math.min(bytes,stat.size-start));const read=await handle.read(buffer,0,buffer.length,start);texts.push(buffer.subarray(0,read.bytesRead).toString('utf8'));}}finally{await handle.close();}
+    const value=parseClaudeTitles(texts.join('\n'),id);if(claudeTitleCache.size>1000){claudeTitleFiles.clear();claudeTitleCache.clear();}claudeTitleCache.set(key,{stamp,value});return value;
+  }catch{claudeTitleFiles.delete(key);return null;}
+}
 async function readClaude(home) {
   const dir = path.join(home, '.claude', 'sessions'); let names; try { names = await fs.readdir(dir); } catch { return []; }
   const rows = await Promise.all(names.filter(n => /^\d+\.json$/.test(n)).map(async n => {
@@ -63,7 +76,8 @@ async function readClaude(home) {
       const r = JSON.parse(await fs.readFile(path.join(dir, n), 'utf8'));
       if (!uuid.test(r.sessionId) || !alive(r.pid)) return null;
       const endpoint = typeof r.messagingSocketPath === 'string' && /^\\\\\.\\pipe\\(?:LOCAL\\)?cc-msg-[a-z0-9-]+$/i.test(r.messagingSocketPath) ? r.messagingSocketPath : null;
-      return { id: `claude:${r.sessionId}`, nativeId: r.sessionId, name: r.name || r.sessionId, harness: 'claude', cwd: r.cwd || '', pid: r.pid, procStart: r.procStart, ownerClientId:`claude:${r.pid}:${r.procStart||''}`, state: r.status || 'unknown', online: false, available: false, reachable: false, remote: r.bridgeSessionId ? 'registered' : 'unknown', endpoint, version: r.version, entrypoint: r.entrypoint || 'unknown', source: 'live-registry' };
+      const title=await readClaudeTitle(home,r.sessionId,r.cwd);
+      return { id: `claude:${r.sessionId}`, nativeId: r.sessionId, name: title?.title||r.name || r.sessionId, nativeTitle:title?.title||null,titleSource:title?.titleSource||'native-registry',registryName:r.name||null, harness: 'claude', cwd: r.cwd || '', pid: r.pid, procStart: r.procStart, ownerClientId:`claude:${r.pid}:${r.procStart||''}`, state: r.status || 'unknown', online: false, available: false, reachable: false, remote: r.bridgeSessionId ? 'registered' : 'unknown', endpoint, version: r.version, entrypoint: r.entrypoint || 'unknown', source: 'live-registry' };
     } catch { return null; }
   }));
   return rows.filter(Boolean);
@@ -139,7 +153,7 @@ class NativeMesh {
         codex.push(item);
       }
     }));
-    return [...claude, ...codex].filter(r=>!projectPath||inProject(r.cwd,projectPath)).map(row=>({...row,...routingStatus(row,bridge,this.ipc.clientTypes?.get(row.ownerClientId))})).sort((a,b) => Number(b.reachable)-Number(a.reachable) || a.name.localeCompare(b.name));
+    return [...claude, ...codex].filter(r=>!projectPath||inProject(r.cwd,projectPath)).map(row=>({...row,providerName:row.name,name:bridge.labels?.[row.id]||row.name,labelSource:bridge.labels?.[row.id]?'user-label':row.titleSource||'saved-index',...routingStatus(row,bridge,this.ipc.clientTypes?.get(row.ownerClientId))})).sort((a,b) => Number(b.reachable)-Number(a.reachable) || a.name.localeCompare(b.name));
   }
   async send(targetId, text, sender = { id: 'human-via-vscode', name: 'VS Code user' }) {
     if (typeof text !== 'string' || !text.trim() || text.length > 60000) throw Error('Message empty or exceeds 60,000 characters');
@@ -207,4 +221,4 @@ class NativeMesh {
   }
   close() { this.ipc.close(); }
 }
-module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth, ownerSteerParams, openCodexThread, inProject, readCodexMetadata };
+module.exports = { NativeMesh, readClaude, resolveTarget, codexState, alive, ownerText, ownerReceipt, ownerViewHealth, ownerSteerParams, openCodexThread, inProject, readCodexMetadata, parseClaudeTitles, readClaudeTitle };

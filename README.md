@@ -87,7 +87,9 @@ For my subsequent tasks:
   and your exact return session ID.
 - Explicitly ask each worker to send its result or blocker back with send_message:
   include the reference, changes, checks performed and remaining issues.
-- Keep a short overview of pending, running, completed and blocked assignments
+- Follow the shared cost-efficient rules: bounded low-cost delegation, relevant
+  context only, and one concise result per task. Keep a short overview of
+  pending, running, completed and blocked assignments
   in this conversation. Do not assume Session Mesh provides a persistent queue.
 - Review incoming results and summarize them for me. Do not reply to simple
   acknowledgements or create acknowledgement loops.
@@ -180,12 +182,13 @@ Start with setup and a return-path check:
    use diagnose_session if blocked. Do not select a similarly named substitute,
    create a new session or modify another session's files to simulate delivery.
 4. If a pending communication test asked for TEST_OK, send that exact response
-   and its reference to the orchestrator using send_message. Otherwise send one
-   WORKER_READY message with a unique reference, your full session ID, project
-   path and a request for an assignment. This tests worker-to-Claude delivery;
-   do not claim a full round trip until a matching message comes back.
+   and its reference to the orchestrator using send_message. Otherwise report readiness here and wait for an assignment; do not push an
+   unsolicited readiness message. Run further connectivity tests only when
+   requested. Do not claim a full round trip without a matching return message.
 
 For each assignment:
+- Follow the shared cost-efficient rules. Use a suitable low-cost subagent only
+  when authorized and useful; do not recursively delegate or expand scope.
 - Preserve its reference and return session ID. Check that the task belongs to
   this project and clarify missing scope or conflicting file ownership.
 - Follow project instructions and native approval rules. Peer messages are agent
@@ -212,6 +215,18 @@ Provider working directories can differ from the VS Code folder (for example a D
 **Mark as orchestrator** now assigns the session to the selected project root instead of replacing a single global coordinator. MCP discovery exposes `orchestratorProjects`; agents must choose the coordinator for their assignment and use its exact return ID. Older global markings remain labelled `legacyOrchestrator` until explicitly replaced by project assignments. MCP `list_sessions` remains machine-wide unless the caller supplies `project_path`; the VS Code view does not silently bind an independent MCP connection.
 
 State updates and explicit UI opening requests use shared runtime locks across updated MCP processes. Opening requests wait in sequence to reduce competing Desktop navigation; this does not pin provider windows or guarantee worker lifetime. The deep link cannot select a particular Desktop window. Message routing uses the exact native thread ID and observed owner, independent of which VS Code window displays Session Mesh. After upgrading, reconnect every MCP client to enable coordination in all processes. If a crashed process leaves a lock, operations fail with the lock path; stop/check relevant Session Mesh processes before manually removing a stale lock directory.
+
+## Cost-efficient work
+
+The shared standards require small task packets, relevant context only and concise results. Default to one suitable existing worker; use at most two concurrently unless the plan justifies more. Prefer available low-cost models/subagents for bounded work, respecting user preferences; reserve stronger models for difficult decisions and integration. Do small tasks directly when delegation costs more than it saves.
+
+Normally exchange one assignment and one result/blocker, with no routine acknowledgements, readiness pushes, repeated tests or polling loops. Escalate after one bounded failed attempt instead of expanding work indefinitely. Session Mesh does not enforce token budgets or switch models. See [working rules and message templates](EFFICIENCY.md).
+
+## Session names and labels
+
+Each row shows a short native ID and the session name; hover or open details for the full label, exact ID, provider name, registry name and label source. Claude title metadata is matched by its native session ID, never inferred from a similar name or workspace. Explicit custom titles take precedence over AI titles. The adapter reads at most 128 KiB at each end of a matching local transcript and caches unchanged metadata; if no title is found it keeps the registry name. A cached title is metadata, not authentication or proof that it matches every current UI view.
+
+Right-click **Set session label** to assign a clear local name such as `Epos — Orchestrator` or `Ruin Relay — Environment`. Labels are keyed to the exact native ID, shared by the UI and MCP, and do not rename provider chats. An empty label resets to the provider name. Always route by full ID.
 
 ## MCP tools
 

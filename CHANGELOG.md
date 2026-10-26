@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 — Efficient orchestration and identifiable sessions
+
+- Adds shared cost-efficient rules: bounded tasks, relevant context, least-expensive suitable models subject to user preferences, limited concurrency and no routine acknowledgement/readiness/polling loops. These are behavioral guidance, not model switching or enforced spending limits.
+- Removes repeated standards from list_sessions by default; initialization and mesh_standards still provide them, and include_standards opts in.
+- Resolves Claude custom/AI title metadata by exact native ID using bounded, cached local reads; retains registryName and title/label provenance.
+- Shows a short ID beside each session label and adds user-defined labels keyed by native ID, shared with MCP without renaming provider chats.
+- Adds an efficiency guide and updates startup guidance.
+
+Validation: 37 automated tests; read-only live metadata lookup confirmed the 0-game-41 session title as Abschlussrunde Epos of Ashes. No worker task, message or model-selection change was performed during this validation.
+
+
 ## 0.4.1 — Project views and concurrent orchestrators
 
 - Defaults each VS Code window to its workspace project view; adds a project scope selector and explicit all-projects mode. Hidden entries are stored per workspace.
