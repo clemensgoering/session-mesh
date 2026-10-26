@@ -2,6 +2,12 @@
 
 **Experimental preview · Windows x64 · VS Code Desktop.** A local tunnel between your **existing** Claude Code sessions and Codex threads. It does not create replacement chats, run a separate agent or manage an orchestration queue. Not affiliated with Anthropic, OpenAI or Microsoft.
 
+## Minimal remote orchestration setup
+
+Use a remote-enabled Claude session as your phone entry point. Keep your existing Codex workers open locally in VS Code or Desktop. Both load the same user-wide Session Mesh MCP server and standards. Claude identifies itself, sends a task to an exact Codex ID, and asks the worker to explicitly send_message its result back to Claude. From the phone, continue that same Claude Remote Control session. Codex does not need its own mobile connection for this route. Both directions still require a live end-to-end test.
+
+Version 0.3.1 removes the accidental default Desktop-confirmation barrier. Online local recipients may receive messages through their real owner even if the owner app type is unknown. If upgrading a setup that explicitly saved desktop-only mode, choose Codex-Routing ? Alle lokalen Besitzer erlauben. Direct mobile control of every Codex thread remains independent and is not promised by this tunnel.
+
 ## What it does
 
 - Discovers live Claude sessions from their native registry and recently indexed Codex threads from the native index.
@@ -11,9 +17,9 @@
 - Gives both harnesses the same MCP tools and communication standards. An agent explicitly sends results to its designated orchestrator; no completion hook is required.
 - Lets you hide entries without deleting, archiving or stopping the original chat.
 
-## Desktop and phone workflow (0.3)
+## Optional direct Codex phone workflow
 
-VS Code may stay open as a tunnel. Do not keep the target Codex chat open there for this workflow. Default Codex routing is now **desktop tunnel mode** and refuses sends to unconfirmed owners. The MCP runtime can route without an open VS Code window. This changes routing safeguards, not Codex remote-control support.
+VS Code may stay open as a tunnel. Do not keep the target Codex chat open there for this workflow. Default Codex routing now accepts **any actual live native owner**. Desktop-only mode is optional, and the following steps apply only if you deliberately choose it. The MCP runtime can route without an open VS Code window. This changes routing safeguards, not Codex remote-control support.
 
 1. Let the current answer finish. Close that Codex chat in VS Code, then open the **same existing thread** in the Desktop app. If Desktop still says it is used in another session, do not confirm it yet. Closing a tab is not guaranteed to release native ownership. Session Mesh does not force it.
 2. Refresh Session Mesh. Inspect its actual native owner client ID. The owner application can remain unknown: originator and saved last-writer metadata are not proof. A native client-status event can identify VS Code; otherwise choose **Desktop-Besitzer best?tigen** only after you checked Desktop is independently usable and the conflicting VS Code chat is closed. This is an explicit user attestation, labelled as such.
@@ -29,7 +35,7 @@ Hidden entries, online, idle, routeReady, owner application evidence and remote 
 
 Requires local Windows x64, VS Code 1.94+, Node.js 22+, and separately installed and signed-in provider CLIs/extensions. Provider accounts, usage costs and approval policies still apply. No provider binaries or credentials are bundled. Remote SSH/WSL extension hosts and virtual/untrusted workspaces are not supported in this preview.
 
-1. Install `session-mesh-win32-x64-0.3.0.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
+1. Install `session-mesh-win32-x64-0.3.1.vsix` via Extensions → … → Install from VSIX. Reload the VS Code window once when upgrading from 0.1.
 2. Open Session Mesh in the Activity Bar. Existing reachable sessions appear automatically; use Refresh if you open more chats. The latest 100 indexed Codex threads are considered. Claude names are its native registry names and can differ from tab titles.
 3. Run **Session Mesh: Werkzeuge und Standards einrichten**. Choose **Alle Projekte dieses Benutzers** for user-wide adoption, or **Nur dieses Projekt**. Supply an absolute Node.js path if needed. Setup preserves existing entries and backs up changed files. It refuses conflicting unmanaged `session-mesh` configuration instead of overwriting it.
 4. Reload MCP/configuration in your **existing** provider sessions, or reopen those same threads if your harness requires it. Installation alone cannot hot-load new tools or instructions into an already running agent. Approve native MCP trust prompts as required. Changing project instructions does not rewrite a running model's context.

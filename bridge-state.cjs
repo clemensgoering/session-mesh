@@ -2,7 +2,7 @@
 const fs=require('node:fs/promises'),path=require('node:path');
 class BridgeState {
   constructor(file=path.join(__dirname,'bridge-state.json')){this.file=file;this.writes=Promise.resolve();}
-  async read(){try{const value=JSON.parse(await fs.readFile(this.file,'utf8'));if(value.version!==1)throw Error('Unsupported Session Mesh state version');return value;}catch(e){if(e.code==='ENOENT')return {version:1,codexMode:'desktop',desktopOwners:{},mobileChecks:{}};throw e;}}
+  async read(){try{const value=JSON.parse(await fs.readFile(this.file,'utf8'));if(value.version!==1)throw Error('Unsupported Session Mesh state version');return value;}catch(e){if(e.code==='ENOENT')return {version:1,codexMode:'any-owner',desktopOwners:{},mobileChecks:{}};throw e;}}
   async update(change){const operation=this.writes.catch(()=>{}).then(async()=>{const state=await this.read();await change(state);await fs.mkdir(path.dirname(this.file),{recursive:true});const tmp=this.file+`.${process.pid}.tmp`;await fs.writeFile(tmp,JSON.stringify(state,null,2)+'\n');await fs.rename(tmp,this.file);return state;});this.writes=operation;return operation;}
   async confirmDesktop(ownerClientId){if(!ownerClientId)throw Error('No native owner to confirm');return this.update(s=>{s.desktopOwners[ownerClientId]={confirmedAt:new Date().toISOString(),evidence:'user-confirmed'};});}
   async recordProbe(id,result){return this.update(s=>{s.lastProbe={id,ownerClientId:result.ownerClientId||null,messageId:result.messageId,expectedReply:result.expectedReply,status:result.status,at:new Date().toISOString()};});}
@@ -16,6 +16,6 @@ function routingStatus(row,state,observedType){
   const desktop=ownerApp==='desktop'||ownerApp==='desktop-confirmed';
   const routeReady=Boolean(row.reachable)&&(row.harness!=='codex'||state.codexMode==='any-owner'||desktop);
   const mobile=state.mobileChecks?.[row.id];
-  return {ownerApp,ownerEvidence,nativeClientType:observedType||null,routeReady,routingMode:state.codexMode||'desktop',remote:mobile&&mobile.ownerClientId===row.ownerClientId?'user-confirmed':row.harness==='claude'?row.remote:'unverified',remoteCheckedAt:mobile?.ownerClientId===row.ownerClientId?mobile?.confirmedAt:null,role:state.orchestratorId===row.id?'orchestrator':'peer',routeBlock:routeReady?null:!row.reachable?'no-live-owner':observed==='vscode'?'owned-in-vscode':'desktop-owner-not-confirmed'};
+  return {ownerApp,ownerEvidence,nativeClientType:observedType||null,routeReady,routingMode:state.codexMode||'any-owner',remote:mobile&&mobile.ownerClientId===row.ownerClientId?'user-confirmed':row.harness==='claude'?row.remote:'unverified',remoteCheckedAt:mobile?.ownerClientId===row.ownerClientId?mobile?.confirmedAt:null,role:state.orchestratorId===row.id?'orchestrator':'peer',routeBlock:routeReady?null:!row.reachable?'no-live-owner':observed==='vscode'?'owned-in-vscode':'desktop-owner-not-confirmed'};
 }
 module.exports={BridgeState,routingStatus};

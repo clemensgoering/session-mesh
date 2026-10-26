@@ -25,3 +25,7 @@ Remote control remains owned by each provider. No external port or alternate rem
 ## 0.3 owner and remote safeguards
 
 Client status broadcasts can identify a client type when observed. Existing owners are not enumerated by the router handshake, so app type can remain unknown. Never infer current application ownership from originator/source fields. Default Desktop routing requires observed Desktop type or explicit user attestation for the live ownerClientId; an observed vscode type takes precedence over an attestation. Owner identity is checked again before mutation. UI/MCP do not register ownership handlers or resume threads. The immutable owner ID changes on client recreation, invalidating old evidence. Remote success is separately user-confirmed against a recent probe and displayed with its timestamp. It is not an automated provider-health measurement.
+
+## 0.3.1 correction
+
+The 0.3 Desktop-attestation default blocked otherwise reachable recipients before any message was sent. It is now optional; the default sends to the actual native owner. Unknown app type is diagnostic information, not a failed transport. Keep local send/receive testing separate from phone UI testing.

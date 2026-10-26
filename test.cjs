@@ -85,7 +85,7 @@ test('owner drift between inspection and submit never mutates a competing sessio
 });
 test('bridge state defaults, desktop binding and phone proof persist with exact owner',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-bridge-'));try{
-    const state=new BridgeState(path.join(dir,'state.json'));assert.equal((await state.read()).codexMode,'desktop');await assert.rejects(state.confirmMobile('codex:a','owner'),/fresh connection test/);await state.confirmDesktop('owner');
+    const state=new BridgeState(path.join(dir,'state.json'));assert.equal((await state.read()).codexMode,'any-owner');await assert.rejects(state.confirmMobile('codex:a','owner'),/fresh connection test/);await state.confirmDesktop('owner');
     await state.recordProbe('codex:a',{ownerClientId:'owner',messageId:'probe',expectedReply:'MESH_PROBE_test',status:'accepted'});
     await assert.rejects(state.confirmMobile('codex:a','different'),/fresh connection test/);await state.confirmMobile('codex:a','owner');const s=await state.read();assert.equal(s.desktopOwners.owner.evidence,'user-confirmed');assert.equal(s.mobileChecks['codex:a'].messageId,'probe');
   }finally{await fs.rm(dir,{recursive:true,force:true})}
@@ -93,3 +93,5 @@ test('bridge state defaults, desktop binding and phone proof persist with exact 
 test('read-only MCP diagnosis does not send or require claiming another identity',async()=>{
   let calls=0;const handle=createHandler({inspect:async id=>{calls++;return {id,routeReady:false}},send:async()=>{throw Error('must not send')}});const r=await handle({id:1,method:'tools/call',params:{name:'diagnose_session',arguments:{id:'codex:a'}}});assert.equal(JSON.parse(r.result.content[0].text).routeReady,false);assert.equal(calls,1);
 });
+
+test('default local mode routes unknown and VS Code owners without Desktop attestation',async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-default-'));try{const state=new BridgeState(path.join(dir,'state.json'));const config=await state.read();for(const type of [undefined,'vscode']){const row=routingStatus({id:'codex:a',harness:'codex',ownerClientId:'native',reachable:true},config,type);assert.equal(row.routeReady,true);assert.equal(row.remote,'unverified');}}finally{await fs.rm(dir,{recursive:true,force:true})}});

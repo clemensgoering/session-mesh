@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 ? Remove the accidental local-routing barrier
+
+- Default local routing accepts actual live Codex owners without a Desktop attestation.
+- Retains optional Desktop-only policy and distinct remote evidence.
+- Corrects common agent instructions: a remotely reachable Claude coordinator can delegate to local Codex workers in either UI.
+- Adds a regression test for unknown/VS Code owner routing. This does not establish bidirectional delivery or fix native Codex mobile exclusivity.
+
 ## 0.3.0 ? Desktop-/phone-oriented tunnel
 
 - Defaults Codex delivery to user-confirmed Desktop owners; permits explicit any-owner local mode.
