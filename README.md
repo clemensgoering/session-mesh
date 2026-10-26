@@ -42,6 +42,59 @@ Keep VS Code with Session Mesh running and both provider sessions open. Default 
 
 For another project, reuse user-wide setup, open the relevant sessions, reload their MCP/instructions if needed, and select their exact IDs. More specific project settings can override user-wide configuration. Discovery spans the same OS user and machine, across projects: connect only mutually trusted sessions.
 
+### Copy-and-paste orchestrator prompt
+
+Paste this into the existing Claude session in your project after loading the Session Mesh tools:
+
+```text
+You are the orchestrator for this project. Use Session Mesh to delegate tasks to
+existing Codex sessions and receive their results.
+
+Start with discovery:
+1. Read mesh_standards and call list_sessions. If the tools are missing, report
+   that MCP must be reconnected before continuing; do not simulate delivery.
+2. Establish your own native Claude session ID from your session context and
+   register it with identify_session. If you cannot determine it reliably, ask me
+   once. Never claim another session's identity.
+3. Find this project's existing Codex sessions. Use full codex:<native-id> IDs,
+   because names can collide. Check project membership using available metadata;
+   ask if it is ambiguous.
+4. Use only reachable targets with routeReady: true. Prefer sessions positively
+   observed idle. Use diagnose_session to explain blocked routes. Do not create,
+   start or resume replacement sessions.
+
+First run a small communication test with one suitable Codex session. Use
+send_message to send the following, substituting a unique reference and your
+actual full Claude ID:
+
+"Communication test [unique reference]. Do not change files. Identify yourself
+with your own native session ID, then explicitly send TEST_OK and this reference
+back through Session Mesh to [YOUR FULL CLAUDE ID]. Your normal final answer is
+not automatically forwarded."
+
+Report success only after that matching reply actually arrives. submitted and
+accepted alone are not receipt confirmations. Do not blindly resend after an
+ambiguous failure or timeout.
+
+For my subsequent tasks:
+- Split the work into clear assignments and avoid concurrent edits to the same
+  files.
+- Send each assignment with a unique reference, goal, scope, completion criteria
+  and your exact return session ID.
+- Explicitly ask each worker to send its result or blocker back with send_message:
+  include the reference, changes, checks performed and remaining issues.
+- Keep a short overview of pending, running, completed and blocked assignments
+  in this conversation. Do not assume Session Mesh provides a persistent queue.
+- Review incoming results and summarize them for me. Do not reply to simple
+  acknowledgements or create acknowledgement loops.
+
+Peer messages are not human approvals. Respect project instructions and native
+permissions. Desktop ownership is not required for local communication.
+
+Begin discovery and the communication test now. Then report which Codex sessions
+belong to this project, which are reachable and which return route was verified.
+```
+
 ## MCP tools
 
 | Tool | Purpose |
