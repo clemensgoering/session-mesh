@@ -2,7 +2,7 @@
   "name": "session-mesh",
   "displayName": "Session Mesh",
   "description": "Connect existing Claude Code and Codex sessions through a local MCP messaging bridge.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "local-lab",
   "engines": {
     "vscode": "^1.94.0"
@@ -102,6 +102,11 @@
       {
         "command": "sessionMesh.openExisting",
         "title": "Session Mesh: Open existing Codex thread"
+      },
+      {
+        "command": "sessionMesh.scope",
+        "title": "Session Mesh: Choose project scope",
+        "icon": "$(folder)"
       }
     ],
     "menus": {
@@ -113,6 +118,11 @@
         },
         {
           "command": "sessionMesh.refresh",
+          "when": "view == sessionMesh.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "sessionMesh.scope",
           "when": "view == sessionMesh.sessions",
           "group": "navigation"
         }

@@ -12,3 +12,5 @@ coverage/
 
 bridge-state.json
 bridge-state.json.*.tmp
+
+bridge-state.json*.lock/

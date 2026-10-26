@@ -2,7 +2,7 @@
 const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os'), net = require('node:net');
 const { randomUUID, createHash } = require('node:crypto');
 const { CodexIPC } = require('./ipc.cjs');
-const { BridgeState,routingStatus }=require('./bridge-state.cjs');
+const { BridgeState,routingStatus,inProject,withFileLock }=require('./bridge-state.cjs');
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 async function openCodexThread(id) {
   if (!uuid.test(id)) throw Error('Invalid native Codex UUID');
@@ -12,11 +12,6 @@ async function openCodexThread(id) {
   await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
     `Start-Process -FilePath 'codex://threads/${id}' -WindowStyle Hidden -ErrorAction Stop`],
     {windowsHide:true, timeout:10000, maxBuffer:4096});
-}
-function inProject(cwd,root){
-  const normalize=p=>path.win32.normalize(p).replace(/^\\\\\?\\UNC\\/i,'\\\\').replace(/^\\\\\?\\/,'').replace(/[\\/]+$/,'').toLowerCase();
-  const value=normalize(cwd||''),base=normalize(root);
-  return value===base||value.startsWith(base+'\\');
 }
 function readCodexMetadata(home){
   let db;try{
@@ -91,7 +86,7 @@ class NativeMesh {
   async openSession(id) {
     if (typeof id !== 'string' || !id.startsWith('codex:') || !uuid.test(id.slice(6))) throw Error('Use an exact codex:<native-UUID> ID from list_sessions');
     if (this.opening.has(id)) return this.opening.get(id);
-    const pending=this.openQueue.catch(()=>{}).then(()=>this.openExisting(id));
+    const pending=this.openQueue.catch(()=>{}).then(()=>this.bridgeState.file?withFileLock(this.bridgeState.file+'.open.lock',()=>this.openExisting(id),30000):this.openExisting(id));
     this.openQueue=pending;this.opening.set(id,pending);
     try{return await pending;}finally{this.opening.delete(id);}
   }

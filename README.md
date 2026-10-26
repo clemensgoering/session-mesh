@@ -203,6 +203,16 @@ files until you have an assignment. If blocked, report the precise limitation
 here; do not claim that the orchestrator received anything.
 ```
 
+## Multiple projects and windows
+
+Each VS Code window defaults to sessions under its workspace folders. Use **Session Mesh: Choose project scope** (folder icon) to select a provider project path or explicitly show all projects. Hidden entries and scope are saved per workspace; windows opened on the same workspace share those preferences.
+
+Provider working directories can differ from the VS Code folder (for example a Desktop project directory versus a source checkout). If the default view is empty, select the exact provider `cwd`; Session Mesh does not infer that different paths are the same project. This view filter is not a security boundary.
+
+**Mark as orchestrator** now assigns the session to the selected project root instead of replacing a single global coordinator. MCP discovery exposes `orchestratorProjects`; agents must choose the coordinator for their assignment and use its exact return ID. Older global markings remain labelled `legacyOrchestrator` until explicitly replaced by project assignments. MCP `list_sessions` remains machine-wide unless the caller supplies `project_path`; the VS Code view does not silently bind an independent MCP connection.
+
+State updates and explicit UI opening requests use shared runtime locks across updated MCP processes. Opening requests wait in sequence to reduce competing Desktop navigation; this does not pin provider windows or guarantee worker lifetime. The deep link cannot select a particular Desktop window. Message routing uses the exact native thread ID and observed owner, independent of which VS Code window displays Session Mesh. After upgrading, reconnect every MCP client to enable coordination in all processes. If a crashed process leaves a lock, operations fail with the lock path; stop/check relevant Session Mesh processes before manually removing a stale lock directory.
+
 ## MCP tools
 
 | Tool | Purpose |

@@ -15,7 +15,7 @@ function createHandler(mesh = new NativeMesh()) {
   return async m => {
     if (m.id === undefined) return;
     let result;
-    if (m.method === 'initialize') result = { protocolVersion:m.params?.protocolVersion || '2024-11-05', capabilities:{tools:{}}, serverInfo:{name:'session-mesh',version:'0.4.0'}, instructions:STANDARDS };
+    if (m.method === 'initialize') result = { protocolVersion:m.params?.protocolVersion || '2024-11-05', capabilities:{tools:{}}, serverInfo:{name:'session-mesh',version:'0.4.1'}, instructions:STANDARDS };
     else if (m.method === 'ping') result = {};
     else if (m.method === 'tools/list') result = {tools};
     else if (m.method === 'tools/call') {

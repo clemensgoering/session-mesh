@@ -161,3 +161,20 @@ test('saved project metadata filters before the recent thread limit and does not
  await assert.rejects(mesh.list({projectPath:'relative'}),/absolute/);
  }finally{await fs.rm(dir,{recursive:true,force:true})}
 });
+
+test('independent window state writers preserve both project orchestrators',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-windows-'));try{const file=path.join(dir,'state.json');const a=new BridgeState(file),b=new BridgeState(file);await Promise.all([a.setOrchestrator('D:\\ProjectA','claude:a'),b.setOrchestrator('D:\\ProjectB','claude:b')]);const state=await a.read();assert.equal(Object.keys(state.projectOrchestrators).length,2);assert.deepEqual(routingStatus({id:'claude:a',harness:'claude'},state).orchestratorProjects,['D:\\ProjectA']);assert.deepEqual(routingStatus({id:'claude:b',harness:'claude'},state).orchestratorProjects,['D:\\ProjectB']);}finally{await fs.rm(dir,{recursive:true,force:true})}
+});
+test('separate MCP mesh instances serialize UI opening through the shared runtime lock',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mesh-open-windows-'));try{let active=0,max=0;const file=path.join(dir,'state.json');const a=new NativeMesh({state:new BridgeState(file)}),b=new NativeMesh({state:new BridgeState(file)});const run=async id=>{active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,20));active--;return {id}};a.openExisting=run;b.openExisting=run;await Promise.all([a.openSession('codex:11111111-1111-1111-1111-111111111111'),b.openSession('codex:22222222-2222-2222-2222-222222222222')]);assert.equal(max,1);}finally{await fs.rm(dir,{recursive:true,force:true})}
+});
+
+test('two extension windows default to distinct project views and workspace preferences',async()=>{
+ const vm=require('node:vm');const source=await fs.readFile(path.join(__dirname,'extension.cjs'),'utf8');
+ async function windowFor(root){const commands=new Map(),local=new Map(),calls=[];let view;const vscode={workspace:{isTrusted:true,workspaceFolders:[{uri:{fsPath:root}}],onDidChangeWorkspaceFolders:()=>({dispose(){}})},env:{},EventEmitter:class{event=()=>{};fire(){};dispose(){}},window:{createOutputChannel:()=>({appendLine(){}}),createTreeView:(_id,o)=>(view={...o,visible:true}),showInformationMessage:()=>Promise.resolve(),showErrorMessage:m=>{throw Error(m)}},commands:{registerCommand:(id,f)=>{commands.set(id,f);return {dispose(){}}}}};
+ class Mesh{async list(options){calls.push(options);return [{id:'codex:'+root,cwd:root}]};close(){}}
+ const assignments=[];class State{async read(){return {codexMode:'any-owner'}};async setOrchestrator(...args){assignments.push(args)}}
+ const sandbox={module:{exports:{}},process:{platform:'win32'},setInterval:()=>1,clearInterval(){},require:name=>name==='vscode'?vscode:name==='./native.cjs'?{NativeMesh:Mesh}:name==='./bridge-state.cjs'?{BridgeState:State}:name==='./setup.cjs'?{}:name==='node:fs/promises'?{mkdir:async()=>{},copyFile:async()=>{}}:require(name)};
+ vm.runInNewContext(source,sandbox);const context={globalStorageUri:{fsPath:'D:\\runtime'},extensionPath:__dirname,subscriptions:[],globalState:{get:()=>true},workspaceState:{get:(k,d)=>local.has(k)?local.get(k):d,update:async(k,v)=>local.set(k,v)}};sandbox.module.exports.activate(context);await new Promise(r=>setImmediate(r));return {commands,local,calls,view,assignments};}
+ const a=await windowFor('D:\\ProjectA'),b=await windowFor('D:\\ProjectB');assert.equal(a.calls[0].projectPath,'D:\\ProjectA');assert.equal(b.calls[0].projectPath,'D:\\ProjectB');await a.commands.get('sessionMesh.remove')({id:'codex:a'});assert.equal(a.local.get('hiddenSessions')[0],'codex:a');assert.equal(b.local.has('hiddenSessions'),false);await a.commands.get('sessionMesh.orchestrator')({id:'claude:a'});assert.equal(a.assignments[0][0],'D:\\ProjectA');assert.equal(a.assignments[0][1],'claude:a');
+});

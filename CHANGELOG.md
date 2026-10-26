@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — Project views and concurrent orchestrators
+
+- Defaults each VS Code window to its workspace project view; adds a project scope selector and explicit all-projects mode. Hidden entries are stored per workspace.
+- Stores orchestrator assignments per project with orchestratorProjects metadata, retaining labelled legacy global markers. MCP project filtering remains explicit.
+- Serializes shared state writes and provider UI opening requests across updated processes using runtime locks. Stale locks fail closed with a diagnostic path.
+- Documents provider path differences and the remaining inability to target a particular Desktop window via deep links. Exact thread/owner message routing is unchanged.
+- Corrects the onboarding completion key.
+
+Validation: 33 automated tests, including independent state writers, serialized opening across separate mesh instances and distinct mocked VS Code window scopes/preferences. A simultaneous two-window live delegation test has not yet been performed.
+
+
 ## 0.4.0 — Open existing Codex workers on demand
 
 - Adds identified MCP open_session and an extension action to open an exact saved Codex thread through the documented Desktop deep link. No task or message is sent by opening.
