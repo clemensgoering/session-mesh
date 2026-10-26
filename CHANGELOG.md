@@ -8,7 +8,9 @@
 - Reads saved project paths from local Codex SQLite metadata in read-only mode. Optional list_sessions project_path filters the project and descendants before the recent-thread limit. Missing metadata remains unknown.
 - Updates orchestrator instructions for existing projects and on-demand opening. Native owner lifetime and MCP loading still depend on the provider.
 
-Validation: 30 automated tests; live opening changed existing Lademanagement and Vulkan Biom threads from not-loaded/no owner to idle/route-ready without sending a message; the second check used the identified MCP handler. Project-filtered discovery found 35 saved project threads; the first worker remained reachable after opening the second. No new end-to-end messaging or phone test was performed for this version.
+Validation: 30 automated tests; live opening changed existing Lademanagement and Vulkan Biom threads from not-loaded/no owner to idle/route-ready without sending a message; the second check used the identified MCP handler. Project-filtered discovery found 35 saved project threads; the first worker remained reachable after opening the second.
+
+User-confirmed end-to-end test on 2026-10-26: a Claude orchestrator in an established project discovered the unloaded Höhlensystem und Gestaltung Codex thread, opened it with open_session, verified readiness, sent a test through Session Mesh and received TEST_OK through Session Mesh with the same reference MESH-07f2-20261026-02 and the worker's own session ID. The user supplied a screenshot of Claude's completed test report. The worker reported no file changes or runs. This verifies discovery, on-demand opening, delivery and explicit return messaging in the tested environment without prior manual worker registration. It is not a guarantee for all threads or provider versions. No new phone test was reported for 0.4.0; earlier user-reported phone use remains separate evidence.
 
 
 ## 0.3.4 — Preview documentation and distribution

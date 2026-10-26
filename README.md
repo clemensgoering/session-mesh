@@ -144,6 +144,18 @@ background worker pool or forced keep-alive. A local live test opened the saved
 “Lademanagement” thread from `not-loaded` to an observed idle, route-ready owner
 without sending a message.
 
+**Confirmed end-to-end on 2026-10-26 (0.4.0):** In an established project, the
+user tested a Claude orchestrator discovering the unloaded “Höhlensystem und
+Gestaltung” Codex thread, opening that same thread with `open_session`, checking
+readiness and sending a test through Session Mesh. Claude then received
+`TEST_OK` back through Session Mesh with the matching reference
+`MESH-07f2-20261026-02` and the worker's own session ID. The user supplied a
+screenshot of Claude's completed test report. The worker reported no file changes
+or runs. No manual worker registration was needed before discovery and opening.
+This confirms discovery → opening → task delivery → explicit return reply in
+the tested environment; it does not establish compatibility with every thread,
+machine or provider version, or a new phone test for 0.4.0.
+
 ### Copy-and-paste Codex worker prompt
 
 Paste this into an existing Codex session. Replace the orchestrator ID below with
